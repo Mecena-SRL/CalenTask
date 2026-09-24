@@ -23,6 +23,12 @@ struct WeekGridView: View {
     /// I membri dello spazio, per le iniziali dell'assegnatario sui blocchi.
     var people: [UserProfile] = []
     var showsWeather = true
+    /// Ore lavorative: fuori si ombreggia; decide anche dove si apre.
+    var workHours: Range<Int>?
+    /// Da dove entra il periodo nuovo (avanti = da destra).
+    var transitionEdge: Edge = .trailing
+    /// Cambia quando si preme "Oggi": la griglia torna sull'ora corrente.
+    var scrollToNowToken = 0
     var onOpenDay: (Date) -> Void = { _ in }
 
     /// F23 — l'altezza dell'ora segue lo spazio: ~14 ore visibili senza
@@ -35,7 +41,7 @@ struct WeekGridView: View {
         min(64, max(34, viewportHeight / 14))
     }
 
-    private let labelWidth: CGFloat = 40
+    private let labelWidth: CGFloat = 46
     private let columnGap: CGFloat = 2
     private let snapMinutes = 15
     private let calendar = Calendar.app
@@ -44,6 +50,15 @@ struct WeekGridView: View {
         (0..<max(dayCount, 1)).compactMap {
             calendar.date(byAdding: .day, value: $0, to: weekStart)
         }
+    }
+
+    private var periodID: Date { calendar.startOfDay(for: weekStart) }
+
+    private var initialHour: Int {
+        CalendarGridMetrics.initialScrollHour(
+            showsToday: days.contains { calendar.isDateInToday($0) }, now: .now,
+            workStart: workHours?.lowerBound ?? 8, calendar: calendar
+        )
     }
 
     var body: some View {
@@ -56,7 +71,10 @@ struct WeekGridView: View {
                 ScrollView {
                     grid(days: days, data: data)
                 }
-                .onAppear { proxy.scrollTo("week-hour-8", anchor: .top) }
+                .onAppear { proxy.scrollTo("week-hour-\(initialHour)", anchor: .top) }
+                .onChange(of: scrollToNowToken) { _, _ in
+                    withAnimation(.dsSoft) { proxy.scrollTo("week-hour-\(initialHour)", anchor: .top) }
+                }
                 .onGeometryChange(for: CGFloat.self) { proxy in
                     proxy.size.height
                 } action: { height in
@@ -70,46 +88,60 @@ struct WeekGridView: View {
     // MARK: Header
 
     /// F23 — una sola riga per giorno ("Lun 16" + meteo): il grosso dello
-    /// spazio verticale va alle ore, non alla testata.
+    /// spazio verticale va alle ore, non alla testata. A sinistra il numero
+    /// della settimana.
     private func header(days: [Date]) -> some View {
         HStack(spacing: 0) {
-            // height fissa: Color.clear altrimenti è greedy in verticale e
-            // si mangia metà dello spazio della griglia (il "vuoto" di F23).
-            Color.clear.frame(width: labelWidth, height: 1)
-            ForEach(days, id: \.self) { day in
-                Button {
-                    onOpenDay(day)
-                } label: {
-                    HStack(spacing: DS.xs) {
-                        Text(day.appFormatted(.dateTime.weekday(.abbreviated)))
-                            .font(.dsCaption)
-                            .foregroundStyle(day.isToday ? .white : .secondary)
-                        Text("\(calendar.component(.day, from: day))")
-                            .font(.dsNumeric.weight(.semibold))
-                            .foregroundStyle(day.isToday ? .white : .primary)
-                        if showsWeather, let forecast = WeatherService.shared.forecast(for: day) {
-                            Image(systemName: forecast.symbolName)
-                                .symbolRenderingMode(day.isToday ? .monochrome : .multicolor)
-                                .foregroundStyle(day.isToday ? .white : .primary)
-                                .font(.system(size: 9))
-                        }
+            Text("S\(calendar.component(.weekOfYear, from: weekStart))")
+                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: labelWidth)
+                .contentTransition(.numericText())
+            ZStack {
+                HStack(spacing: 0) {
+                    ForEach(days, id: \.self) { day in
+                        dayHeaderButton(day)
                     }
-                    .padding(.horizontal, DS.s)
-                    .padding(.vertical, 3)
-                    .background {
-                        if day.isToday {
-                            Capsule().fill(Color.accentColor)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("Apri \(day.appFormatted(.dateTime.weekday(.wide).day().month()))")
+                .id(periodID)
+                .transition(.push(from: transitionEdge))
             }
+            .clipped()
         }
         .padding(.vertical, DS.xs)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func dayHeaderButton(_ day: Date) -> some View {
+        Button {
+            onOpenDay(day)
+        } label: {
+            HStack(spacing: DS.xs) {
+                Text(day.appFormatted(.dateTime.weekday(.abbreviated)))
+                    .font(.dsCaption)
+                    .foregroundStyle(day.isToday ? .white : .secondary)
+                Text("\(calendar.component(.day, from: day))")
+                    .font(.dsNumeric.weight(.semibold))
+                    .foregroundStyle(day.isToday ? .white : .primary)
+                if showsWeather, let forecast = WeatherService.shared.forecast(for: day) {
+                    Image(systemName: forecast.symbolName)
+                        .symbolRenderingMode(day.isToday ? .monochrome : .multicolor)
+                        .foregroundStyle(day.isToday ? .white : .primary)
+                        .font(.system(size: 9))
+                }
+            }
+            .padding(.horizontal, DS.s)
+            .padding(.vertical, 3)
+            .background {
+                if day.isToday {
+                    Capsule().fill(Color.accentColor)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Apri \(day.appFormatted(.dateTime.weekday(.wide).day().month()))")
     }
 
     /// Scadenze e all-day della settimana, compatte sopra la griglia.
@@ -122,25 +154,32 @@ struct WeekGridView: View {
                     .font(.dsCaption)
                     .foregroundStyle(.tertiary)
                     .frame(width: labelWidth)
-                ForEach(days, id: \.self) { day in
-                    // Le chip si dimensionano sul contenuto (niente larghezza
-                    // fissa sproporzionata), allineate a sinistra nel giorno.
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(data.allDayTasks(on: day).prefix(3), id: \.id) { task in
-                            Text(task.title)
-                                .font(.system(size: 9, weight: .medium))
-                                .lineLimit(1)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background(itemTint(task).opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
-                                .foregroundStyle(itemTint(task))
-                                .draggable(task.id.uuidString)
-                                .taskContextMenu(task)
+                ZStack(alignment: .topLeading) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(days, id: \.self) { day in
+                            // Le chip si dimensionano sul contenuto (niente larghezza
+                            // fissa sproporzionata), allineate a sinistra nel giorno.
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(data.allDayTasks(on: day).prefix(3), id: \.id) { task in
+                                    Text(task.title)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(itemTint(task).opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+                                        .foregroundStyle(itemTint(task))
+                                        .draggable(task.id.uuidString)
+                                        .taskContextMenu(task)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 1)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 1)
+                    .id(periodID)
+                    .transition(.push(from: transitionEdge))
                 }
+                .clipped()
             }
             .padding(.bottom, DS.xs)
         }
@@ -150,34 +189,46 @@ struct WeekGridView: View {
 
     private func grid(days: [Date], data: CalendarTaskIndex) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            // Ore
-            VStack(spacing: 0) {
-                ForEach(0..<24, id: \.self) { hour in
-                    Text(String(format: "%02d", hour))
-                        .font(.dsNumeric)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: labelWidth, height: hourHeight, alignment: .topTrailing)
-                        .padding(.trailing, DS.xs)
-                        .id("week-hour-\(hour)")
+            CalendarHourLabels(hourHeight: hourHeight, width: labelWidth, idPrefix: "week-hour-")
+            ZStack(alignment: .topLeading) {
+                // Un solo disegno per ore, mezz'ore, weekend e fuori orario
+                // di TUTTE le colonne (prima: 24 viste × colonna).
+                CalendarHourGridCanvas(
+                    hourHeight: hourHeight,
+                    columns: days.count,
+                    weekendColumns: Set(days.indices.filter { calendar.isDateInWeekend(days[$0]) }),
+                    workHours: workHours
+                )
+                HStack(spacing: 0) {
+                    ForEach(days, id: \.self) { day in
+                        dayColumn(day, tasks: data.timedTasks(on: day))
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .id(periodID)
+                .transition(.push(from: transitionEdge))
             }
-            ForEach(days, id: \.self) { day in
-                dayColumn(day, tasks: data.timedTasks(on: day))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: hourHeight * 24)
-            }
+            .frame(height: hourHeight * 24)
+            .clipped()
         }
+        .overlay(alignment: .topLeading) {
+            CalendarNowIndicator(
+                hourHeight: hourHeight, labelWidth: labelWidth,
+                columns: days.count,
+                todayColumn: days.firstIndex { calendar.isDateInToday($0) }
+            )
+        }
+        .padding(.vertical, DS.s)
     }
 
-    /// Una corsia giornaliera: sfondo orario, superficie per creare, anteprima,
-    /// linea "adesso" e i blocchi a cascata per le sovrapposizioni.
+    /// Una corsia giornaliera: superficie per creare, anteprima e i blocchi a
+    /// cascata per le sovrapposizioni (lo sfondo è il Canvas comune).
     private func dayColumn(_ day: Date, tasks: [TodoTask]) -> some View {
         let clusters = CalendarMath.overlapClusters(for: tasks)
         return GeometryReader { geo in
+            let laneWidth = max(0, geo.size.width - columnGap)
             ZStack(alignment: .topLeading) {
-                hourBackdrop(day)
-
-                // Superficie di creazione (sotto i blocchi, sopra lo sfondo).
+                // Superficie di creazione (sotto i blocchi).
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
@@ -185,20 +236,9 @@ struct WeekGridView: View {
                     .simultaneousGesture(dragCreateGesture(day))
 
                 if let draft = draftRange, calendar.isDate(draft.day, inSameDayAs: day) {
-                    RoundedRectangle(cornerRadius: DS.Radius.small)
-                        .fill(Color.accentColor.opacity(0.22))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.small)
-                                .strokeBorder(Color.accentColor, lineWidth: 1)
-                        )
-                        .frame(width: max(0, geo.size.width - columnGap), height: max(draft.end - draft.start, 12))
-                        .offset(y: draft.start)
-                        .allowsHitTesting(false)
+                    draftPreview(start: draft.start, end: draft.end, width: laneWidth)
+                        .offset(x: 1, y: draft.start)
                 }
-
-                // E10: linea now piena solo su oggi, sbiadita sugli altri giorni.
-                DSNowLine(isProminent: day.isToday)
-                    .offset(y: yPosition(for: .now))
 
                 // Sovrapposizioni a CASCATA, come nel Giorno: nelle colonne
                 // strette della settimana evita le fettine illeggibili — le
@@ -207,7 +247,8 @@ struct WeekGridView: View {
                     clusters: clusters,
                     people: people,
                     hourHeight: hourHeight,
-                    laneWidth: max(0, geo.size.width - columnGap),
+                    laneWidth: laneWidth,
+                    leadingInset: 1,
                     minimumMinutes: 20
                 )
             }
@@ -217,19 +258,27 @@ struct WeekGridView: View {
         }
     }
 
-    private func hourBackdrop(_ day: Date) -> some View {
-        VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { _ in
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: hourHeight)
-                    .overlay(alignment: .top) { Divider().opacity(0.5) }
+    /// Anteprima del blocco mentre si trascina per crearlo, con l'orario.
+    private func draftPreview(start: CGFloat, end: CGFloat, width: CGFloat) -> some View {
+        let startMinutes = snap(minutes(at: start))
+        let endMinutes = max(snap(minutes(at: end)), startMinutes + 15)
+        return RoundedRectangle(cornerRadius: DS.Radius.small)
+            .fill(Color.accentColor.opacity(0.22))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.small)
+                    .strokeBorder(Color.accentColor, lineWidth: 1)
+            )
+            .overlay(alignment: .topLeading) {
+                Text(CalendarGridMetrics.rangeLabel(startMinutes, endMinutes))
+                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(3)
             }
-        }
-        .background(
-            calendar.isDateInWeekend(day) ? Color.primary.opacity(0.025) : Color.clear
-        )
-        .overlay(alignment: .leading) { Divider().opacity(0.5) }
+            .frame(width: width, height: max(end - start, 12))
+            .allowsHitTesting(false)
+            .sensoryFeedback(.selection, trigger: endMinutes)
     }
 
     // MARK: Creazione (tap / press-drag), condivisa col Giorno
@@ -328,12 +377,6 @@ struct WeekGridView: View {
         task.accentTagColorHex.map { Color(hex: $0) }
             ?? task.project.map { Color(hex: $0.colorHex) }
             ?? .accentColor
-    }
-
-    private func yPosition(for date: Date) -> CGFloat {
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        let minutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)
-        return CGFloat(minutes) / 60 * hourHeight
     }
 
 }

@@ -85,3 +85,39 @@ struct CalendarMathTests {
         #expect(CalendarMath.isSameMonth(grid[2][3], date(2027, 1, 15), calendar: calendar))
     }
 }
+
+/// Fase 1 calendario: geometria delle griglie orarie e orario di lavoro.
+@MainActor
+struct CalendarGridMetricsTests {
+    private let calendar = Calendar.app
+
+    private func date(_ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: hour, minute: minute))!
+    }
+
+    @Test func yPositionFollowsHourHeight() {
+        #expect(CalendarGridMetrics.y(for: date(0), hourHeight: 60, calendar: calendar) == 0)
+        #expect(CalendarGridMetrics.y(for: date(9, 30), hourHeight: 60, calendar: calendar) == 570)
+        #expect(CalendarGridMetrics.y(for: date(9, 30), hourHeight: 40, calendar: calendar) == 380)
+    }
+
+    @Test func gridOpensOnNowWhenTodayIsVisible() {
+        #expect(CalendarGridMetrics.initialScrollHour(showsToday: true, now: date(15, 40),
+                                                      workStart: 9, calendar: calendar) == 14)
+        #expect(CalendarGridMetrics.initialScrollHour(showsToday: true, now: date(0, 10),
+                                                      workStart: 9, calendar: calendar) == 0)
+        #expect(CalendarGridMetrics.initialScrollHour(showsToday: false, now: date(15),
+                                                      workStart: 9, calendar: calendar) == 9)
+        #expect(CalendarGridMetrics.initialScrollHour(showsToday: true, now: date(23, 50),
+                                                      workStart: 9, calendar: calendar) == 20)
+    }
+
+    @Test func workHoursAndClockLabels() {
+        #expect(CalendarWorkHours.range(start: 9, end: 18) == 9..<18)
+        #expect(CalendarWorkHours.range(start: 18, end: 9) == nil)
+        #expect(CalendarWorkHours.range(start: -3, end: 30) == 0..<24)
+        #expect(CalendarGridMetrics.clockLabel(9 * 60 + 5) == "09:05")
+        #expect(CalendarGridMetrics.clockLabel(24 * 60) == "24:00")
+        #expect(CalendarGridMetrics.rangeLabel(570, 660) == "09:30 – 11:00")
+    }
+}

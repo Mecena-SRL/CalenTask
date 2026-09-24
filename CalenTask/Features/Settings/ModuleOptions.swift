@@ -30,6 +30,8 @@ private struct CalendarModuleOptions: View {
     @AppStorage("calendarWeekDayCount") private var weekDayCount = 7
     @AppStorage("calendarShowsQuarter") private var showsQuarter = true
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
+    @AppStorage(CalendarWorkHours.startKey) private var workStart = CalendarWorkHours.defaultStart
+    @AppStorage(CalendarWorkHours.endKey) private var workEnd = CalendarWorkHours.defaultEnd
 
     private var advancedViews: Bool { configuration.isEnabled(.calendarAdvancedViews) }
 
@@ -73,6 +75,33 @@ private struct CalendarModuleOptions: View {
                               systemImage: "square.grid.3x3.fill", tint: .orange, isOn: $monthHeatmap)
         } header: {
             Text("Viste")
+        }
+
+        Section {
+            Picker(selection: Binding(get: { workStart }, set: { value in
+                workStart = value
+                if workEnd <= value { workEnd = min(value + 1, 24) }
+            })) {
+                ForEach(0..<24, id: \.self) { hour in
+                    Text(CalendarGridMetrics.clockLabel(hour * 60)).tag(hour)
+                }
+            } label: {
+                DSFieldRow(label: "Inizio", systemImage: "sunrise", tint: .orange) { EmptyView() }
+            }
+            Picker(selection: Binding(get: { workEnd }, set: { value in
+                workEnd = value
+                if workStart >= value { workStart = max(value - 1, 0) }
+            })) {
+                ForEach(1...24, id: \.self) { hour in
+                    Text(CalendarGridMetrics.clockLabel(hour * 60)).tag(hour)
+                }
+            } label: {
+                DSFieldRow(label: "Fine", systemImage: "sunset", tint: .indigo) { EmptyView() }
+            }
+        } header: {
+            Text("Orario di lavoro")
+        } footer: {
+            Text("Nelle griglie di Giorno e Settimana le ore fuori orario sono più tenui, e la giornata si apre dall'inizio del lavoro (o dall'ora attuale, se è oggi).")
         }
 
         Section {

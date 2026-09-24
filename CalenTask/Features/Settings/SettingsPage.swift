@@ -146,6 +146,8 @@ enum SettingsSearch {
             .init(title: "Giorni della vista settimana", page: .module(.calendar), keywords: ["n giorni"]),
             .init(title: "Trimestre", page: .module(.calendar), keywords: ["tasse", "viste"]),
             .init(title: "Mappa di calore del mese", page: .module(.calendar), keywords: ["heatmap", "densità"]),
+            .init(title: "Orario di lavoro", page: .module(.calendar),
+                  keywords: ["ore lavorative", "inizio", "fine", "giornata"]),
             .init(title: "Campi delle card Rapida", page: .module(.activities),
                   keywords: ["scadenza", "priorità", "note", "fase"]),
             .init(title: "Progetti chiusi", page: .module(.projects), keywords: ["archivio", "completati"]),

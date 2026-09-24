@@ -37,9 +37,22 @@ struct TimeBlockView: View {
     /// usa questo per sollevare quella sotto il cursore e tornare alla gerarchia
     /// quando ci si allontana.
     var onHover: ((Bool) -> Void)?
+    /// Inizio/fine di uno spostamento o ridimensionamento: il contenitore
+    /// porta il blocco sopra a tutti mentre si muove.
+    var onDragStateChange: ((Bool) -> Void)?
 
     @State private var dragOffset: CGFloat = 0
     @State private var resizeOffset: CGFloat = 0
+    @State private var isMoving = false
+    @State private var isResizing = false
+
+    /// Spostamento agganciato ai 15 minuti: il blocco scatta da una tacca
+    /// all'altra (come Calendario di Apple) e l'orario in anteprima è esatto.
+    private var moveMinutes: Int { snappedMinutes(dragOffset) }
+    private var resizeMinutes: Int { snappedMinutes(resizeOffset) }
+    private var moveOffset: CGFloat { CGFloat(moveMinutes) / 60 * hourHeight }
+    private var resizeDelta: CGFloat { CGFloat(resizeMinutes) / 60 * hourHeight }
+    private var isManipulating: Bool { isMoving || isResizing }
 
     private var tint: Color {
         task.project.map { Color(hex: $0.colorHex) } ?? Color.accentColor
@@ -58,8 +71,12 @@ struct TimeBlockView: View {
     }
 
     var body: some View {
-        let blockHeight = max(height + resizeOffset, hourHeight / 2)
-        let subtasks = task.liveSubtasks
+        let blockHeight = max(height + resizeDelta, hourHeight / 4)
+        // I sotto-task si leggono (relazione + ordinamento) solo se il blocco
+        // è abbastanza grande da mostrarli: le carte strette della settimana
+        // non pagano il costo a ogni frame di pinch.
+        let roomForProgress = blockHeight >= 50 && width >= 108
+        let subtasks = roomForProgress ? task.liveSubtasks : []
         let total = subtasks.count
         let doneCount = subtasks.filter(\.isDone).count
         let hasSubtasks = total > 0
@@ -106,15 +123,40 @@ struct TimeBlockView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.small).fill(DSColor.surface)
             }
         }
-        // Sollevamento: la carta attiva (hover/tap) cresce appena e proietta
-        // un'ombra più marcata — è questo che si anima quando "sale", non lo
-        // z-index (istantaneo). A riposo l'ombra è solo di stacco.
+        // Sollevamento: la carta attiva (hover/tap) o in movimento cresce
+        // appena e proietta un'ombra più marcata — è questo che si anima
+        // quando "sale", non lo z-index (istantaneo). A riposo l'ombra è
+        // solo di stacco.
         .shadow(
-            color: cascaded ? .black.opacity(isLifted ? 0.22 : (isFront ? 0.14 : 0.06)) : .clear,
-            radius: cascaded ? (isLifted ? 7 : 2) : 0,
-            x: cascaded ? -1 : 0, y: isLifted ? 3 : 0
+            color: shadowColor,
+            radius: isManipulating ? 10 : (cascaded ? (isLifted ? 7 : 2) : 0),
+            x: cascaded && !isManipulating ? -1 : 0,
+            y: isManipulating ? 5 : (isLifted ? 3 : 0)
         )
-        .scaleEffect(isLifted ? 1.02 : 1, anchor: .center)
+        .scaleEffect(isManipulating ? 1.03 : (isLifted ? 1.02 : 1), anchor: .center)
+        // Mentre si sposta o si allunga: l'orario d'arrivo sopra il blocco.
+        .overlay(alignment: .topLeading) {
+            if isManipulating {
+                Text(previewRange)
+                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(tint, in: Capsule())
+                    .fixedSize()
+                    .offset(y: -20)
+                    .transition(.scale(scale: 0.8, anchor: .bottomLeading).combined(with: .opacity))
+            }
+        }
+        // …e dove era prima, tratteggiato, per capire di quanto si sposta.
+        .background(alignment: .topLeading) {
+            if isMoving, moveMinutes != 0 {
+                RoundedRectangle(cornerRadius: DS.Radius.small)
+                    .strokeBorder(tint.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .frame(width: width, height: max(height, hourHeight / 4))
+                    .offset(y: -moveOffset)
+            }
+        }
         .overlay(alignment: .bottom) {
             // S5 — maniglia di resize VISIBILE: solo la carta in primo piano.
             if isFront {
@@ -136,7 +178,7 @@ struct TimeBlockView: View {
                 #endif
             }
         }
-        .offset(x: xOffset, y: yPosition + dragOffset)
+        .offset(x: xOffset, y: yPosition + moveOffset)
         .onTapGesture {
             if cascaded && !isFront {
                 withAnimation(.dsQuick) { onRaise?() }
@@ -160,6 +202,31 @@ struct TimeBlockView: View {
         .animation(.dsQuick, value: xOffset)
         .animation(.dsQuick, value: width)
         .animation(.dsQuick, value: isLifted)
+        .animation(.dsQuick, value: isManipulating)
+        // Lo scatto da una tacca all'altra: veloce e con un tocco tattile.
+        .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: moveMinutes)
+        .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: resizeMinutes)
+        .sensoryFeedback(.selection, trigger: moveMinutes)
+        .sensoryFeedback(.selection, trigger: resizeMinutes)
+        .transition(.scale(scale: 0.92).combined(with: .opacity))
+    }
+
+    private var shadowColor: Color {
+        if isManipulating { return .black.opacity(0.25) }
+        guard cascaded else { return .clear }
+        return .black.opacity(isLifted ? 0.22 : (isFront ? 0.14 : 0.06))
+    }
+
+    /// L'orario che il blocco avrà rilasciandolo qui.
+    private var previewRange: String {
+        guard let startAt = task.startAt else { return "" }
+        let end = task.endAt ?? startAt.addingTimeInterval(3600)
+        let shift = TimeInterval(moveMinutes * 60)
+        let newStart = startAt.addingTimeInterval(shift)
+        let newEnd = isResizing
+            ? max(end.addingTimeInterval(TimeInterval(resizeMinutes * 60)), startAt.addingTimeInterval(15 * 60))
+            : end.addingTimeInterval(shift)
+        return "\(newStart.dsTimeLabel) – \(newEnd.dsTimeLabel)"
     }
 
     private func open() {
@@ -330,31 +397,52 @@ struct TimeBlockView: View {
 
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 6)
-            .onChanged { dragOffset = $0.translation.height }
+            .onChanged { value in
+                if !isMoving {
+                    isMoving = true
+                    onDragStateChange?(true)
+                }
+                dragOffset = value.translation.height
+            }
             .onEnded { value in
                 let minutes = snappedMinutes(value.translation.height)
+                // Il blocco è già sulla tacca d'arrivo: si azzera lo scarto e
+                // si scrive l'orario nello stesso passaggio, senza salti.
                 withAnimation(.dsQuick) {
                     dragOffset = 0
+                    isMoving = false
                     shiftStart(byMinutes: minutes)
                 }
+                onDragStateChange?(false)
             }
     }
 
     private var resizeGesture: some Gesture {
         DragGesture(minimumDistance: 4)
-            .onChanged { resizeOffset = $0.translation.height }
+            .onChanged { value in
+                if !isResizing {
+                    isResizing = true
+                    onDragStateChange?(true)
+                }
+                resizeOffset = value.translation.height
+            }
             .onEnded { value in
                 let minutes = snappedMinutes(value.translation.height)
                 withAnimation(.dsQuick) {
                     resizeOffset = 0
+                    isResizing = false
                     stretch(byMinutes: minutes)
                 }
+                onDragStateChange?(false)
             }
     }
 
+    /// Scarto in minuti arrotondato alla tacca più vicina (non troncato:
+    /// trascinare di 10' verso l'alto arriva a -15', come ci si aspetta).
     private func snappedMinutes(_ translation: CGFloat) -> Int {
-        let raw = Int(translation / hourHeight * 60)
-        return (raw / snapMinutes) * snapMinutes
+        guard hourHeight > 0 else { return 0 }
+        let raw = Double(translation / hourHeight * 60)
+        return Int((raw / Double(snapMinutes)).rounded()) * snapMinutes
     }
 
     private func shiftStart(byMinutes minutes: Int) {
