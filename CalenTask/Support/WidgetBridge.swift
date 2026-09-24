@@ -2,6 +2,9 @@ import Foundation
 import os
 import SwiftData
 import WidgetKit
+#if os(macOS)
+import Security
+#endif
 
 /// Bridge to the widget (D11/M7): the app serializes a small JSON snapshot
 /// of today into the App Group container; the widget only decodes it.
@@ -32,10 +35,27 @@ enum WidgetBridge {
     static let snapshotFilename = "widget-snapshot.json"
 
     static var snapshotURL: URL? {
-        FileManager.default
+        guard hasAppGroupAccess else { return nil }
+        return FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
             .appendingPathComponent(snapshotFilename)
     }
+
+    /// Build senza l'App Group (DMG firmato ad-hoc): niente widget, e il
+    /// contenitore del gruppo non si tocca. Su macOS toccarlo comunque apre,
+    /// all'avvio, il permesso di sistema "accedere ai dati di altre app".
+    private static let hasAppGroupAccess: Bool = {
+        #if os(macOS)
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(
+                  task, "com.apple.security.application-groups" as CFString, nil
+              )
+        else { return false }
+        return (value as? [String])?.contains(appGroupID) ?? false
+        #else
+        return true
+        #endif
+    }()
 
     /// Rebuilds today's snapshot and pokes WidgetKit. Cheap — call freely
     /// on launch and when the scene goes to the background.

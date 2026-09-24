@@ -77,38 +77,41 @@ struct InboxView: View {
     // MARK: Lista
 
     private var list: some View {
-        List {
-            if !hintDismissed {
-                hintSection
-            }
-            if filteredTasks.isEmpty {
-                Section {
-                    Text("Niente in «\(filter.label)».")
-                        .font(.dsMeta)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, DS.l)
+        // Barra filtri SOPRA la List, non come `.safeAreaInset` (su macOS
+        // l'inset di una List ospitata innescava un ciclo di vincoli).
+        VStack(spacing: 0) {
+            InboxFilterBar(selection: $filter, counts: filterCounts)
+            Divider()
+            List {
+                if !hintDismissed {
+                    hintSection
                 }
-            } else {
-                ForEach(groups) { group in
-                    Section(group.bucket.title) {
-                        ForEach(group.items, id: \.id) { task in
-                            NavigationLink {
-                                TaskDetailView(task: task)   // "Sviluppa": full editor
-                            } label: {
-                                TriageRow(
-                                    task: task, projects: projects,
-                                    provenance: provenance(for: task)
-                                )
+                if filteredTasks.isEmpty {
+                    Section {
+                        Text("Niente in «\(filter.label)».")
+                            .font(.dsMeta)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, DS.l)
+                    }
+                } else {
+                    ForEach(groups) { group in
+                        Section(group.bucket.title) {
+                            ForEach(group.items, id: \.id) { task in
+                                NavigationLink {
+                                    TaskDetailView(task: task)   // "Sviluppa": full editor
+                                } label: {
+                                    TriageRow(
+                                        task: task, projects: projects,
+                                        provenance: provenance(for: task)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        .listStyle(.plain)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            InboxFilterBar(selection: $filter, counts: filterCounts)
+            .listStyle(.plain)
         }
     }
 
