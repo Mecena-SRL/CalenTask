@@ -1115,8 +1115,9 @@ struct CalendarScreen: View {
     private func createBlock(at slot: Date) {
         do {
             let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
             let event = TodoTask(
-                workspaceID: workspace.id,
+                workspaceID: target.id,
                 title: "Nuovo evento",
                 kind: .event,
                 startAt: slot,

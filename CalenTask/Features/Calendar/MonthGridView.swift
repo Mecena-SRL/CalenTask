@@ -289,8 +289,9 @@ struct MonthGridView: View {
         let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         do {
             let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
             let task = TodoTask(
-                workspaceID: workspace.id,
+                workspaceID: target.id,
                 title: "Nuova attività",
                 kind: .task,
                 startAt: start,
