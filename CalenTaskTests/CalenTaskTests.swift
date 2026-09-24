@@ -785,6 +785,55 @@ struct DomainModelTests {
     /// #5 — il calendario carica dallo store solo la finestra visibile e lo
     /// spazio scelto: eventi su più giorni e fasi che la attraversano ci
     /// sono, il resto no.
+    /// #5 — il pannello Oggi carica solo oggi/domani e le scadute dello
+    /// spazio scelto; i contatori della sidebar escono da un solo passaggio.
+    @Test func todayPanelPredicatesAndOpenTaskStats() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        func at(_ days: Int, _ hour: Int = 10) -> Date {
+            calendar.date(byAdding: .hour, value: days * 24 + hour, to: today)!
+        }
+        let project = Project(workspaceID: workspace.id, name: "Spot", createdByID: me.id)
+        context.insert(project)
+        @discardableResult
+        func add(_ title: String, kind: TaskKind = .task, status: TaskStatus = .todo,
+                 start: Date? = nil, due: Date? = nil, workspaceID: UUID? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title, kind: kind,
+                                status: status, startAt: start, dueAt: due, createdByID: me.id)
+            context.insert(task)
+            return task
+        }
+        add("Riunione oggi", kind: .event, start: at(0)).project = project
+        add("Evento domani", kind: .event, start: at(1))
+        add("Evento dopodomani", kind: .event, start: at(2))
+        add("Scaduta", due: at(-3))
+        add("Scade domani", due: at(1))
+        add("Scade tra una settimana", due: at(7))
+        add("Fatta oggi", status: .done, due: at(0))
+        add("Altro spazio", kind: .event, start: at(0), workspaceID: UUID())
+
+        let end = calendar.date(byAdding: .day, value: 2, to: today)!
+        let starting = try context.fetch(FetchDescriptor(
+            predicate: TodoTask.openStartingPredicate(from: today, to: end, workspaceID: workspace.id)
+        ))
+        let due = try context.fetch(FetchDescriptor(
+            predicate: TodoTask.openDuePredicate(before: end, workspaceID: workspace.id)
+        ))
+        let loaded = TodoTask.mergingUnique([starting, due])
+        #expect(Set(loaded.map(\.title)) == ["Riunione oggi", "Evento domani", "Scaduta", "Scade domani"])
+
+        let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate(workspaceID: workspace.id)))
+        let stats = OpenTaskStats(tasks: open, calendar: calendar, now: at(0, 12))
+        #expect(stats.total == 6)
+        #expect(stats.byProject[project.id] == 1)
+        #expect(stats.today == 1)
+        #expect(stats.todayEvents == 1)
+        #expect(stats.byDay[calendar.startOfDay(for: at(1))] == 2)
+    }
+
     @Test func calendarWindowPredicatesFilterInStore() throws {
         let container = try makeContainer()
         let context = container.mainContext

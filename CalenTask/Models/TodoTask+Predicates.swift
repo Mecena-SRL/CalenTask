@@ -143,6 +143,41 @@ extension TodoTask {
         }
     }
 
+    // MARK: Pannello Oggi
+
+    /// Non completate con inizio in [start, end). Modelli e fasi si scartano
+    /// in memoria (pochi): un predicato più lungo supera il type-checker.
+    static func openStartingPredicate(from start: Date, to end: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
+        let doneRaw = TaskStatus.done.rawValue
+        let past = Date.distantPast
+        let future = Date.distantFuture
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && task.statusRaw != doneRaw
+                    && (task.startAt ?? past) >= start && (task.startAt ?? future) < end
+            }
+        }
+        return #Predicate<TodoTask> { task in
+            task.workspaceID == workspaceID && task.deletedAt == nil && task.statusRaw != doneRaw
+                && (task.startAt ?? past) >= start && (task.startAt ?? future) < end
+        }
+    }
+
+    /// Non completate in scadenza prima di `end` (scadute comprese).
+    static func openDuePredicate(before end: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
+        let doneRaw = TaskStatus.done.rawValue
+        let future = Date.distantFuture
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && task.statusRaw != doneRaw && (task.dueAt ?? future) < end
+            }
+        }
+        return #Predicate<TodoTask> { task in
+            task.workspaceID == workspaceID && task.deletedAt == nil && task.statusRaw != doneRaw
+                && (task.dueAt ?? future) < end
+        }
+    }
+
     /// Esegue i predicati della finestra e ne unisce i risultati.
     static func fetchCalendarWindow(
         from start: Date, to end: Date, workspaceID: UUID?, in context: ModelContext

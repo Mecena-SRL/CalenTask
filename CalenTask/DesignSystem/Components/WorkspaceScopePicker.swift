@@ -63,11 +63,12 @@ struct WorkspaceScopePicker: View {
            sort: \Workspace.createdAt)
     private var workspaces: [Workspace]
 
-    @Query(filter: TodoTask.openPredicate)
-    private var openTasks: [TodoTask]
-
     /// Compact = toolbar; expanded = testata della sidebar.
     var isCompact = true
+    /// #5 — Attività aperte nello scope attivo, calcolate da chi le ha già
+    /// caricate (la sidebar): il selettore non carica più TUTTE le attività
+    /// in ognuna delle sue istanze (sidebar + 4 toolbar).
+    var openCount: Int?
 
     private var current: Workspace? {
         workspaces.first { $0.id.uuidString == scopeRaw }
@@ -148,9 +149,7 @@ struct WorkspaceScopePicker: View {
                     Text(label)
                         .font(.dsMeta.weight(.semibold))
                         .foregroundStyle(.primary)
-                    Text(current == nil
-                         ? "\(workspaces.count) spazi · \(openTasks.count) aperte"
-                         : "\(openCount(in: current)) aperte")
+                    Text(expandedSubtitle)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -166,12 +165,20 @@ struct WorkspaceScopePicker: View {
         .buttonStyle(.plain)
         .dsHoverHighlight()
         .popover(isPresented: $showsSwitcher, arrowEdge: .bottom) {
-            switcherPopover
+            OpenCountsReader { counts, total in
+                switcherPopover(counts: counts, total: total)
+            }
         }
     }
 
+    private var expandedSubtitle: String {
+        let open = openCount.map { "\($0) aperte" }
+        guard current == nil else { return open ?? "Spazio attivo" }
+        return ["\(workspaces.count) spazi", open].compactMap(\.self).joined(separator: " · ")
+    }
+
     /// Il popover: ogni spazio è una card viva — colore, contatore, attivo.
-    private var switcherPopover: some View {
+    private func switcherPopover(counts: [UUID: Int], total: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Spazi di lavoro")
                 .font(.dsCaption.weight(.semibold))
@@ -179,10 +186,10 @@ struct WorkspaceScopePicker: View {
                 .padding(.horizontal, DS.s)
                 .padding(.top, DS.xs)
 
-            scopeRow(nil)
+            scopeRow(nil, openCount: total)
             Divider().padding(.vertical, DS.xs)
             ForEach(workspaces, id: \.id) { workspace in
-                scopeRow(workspace)
+                scopeRow(workspace, openCount: counts[workspace.id] ?? 0)
             }
             Divider().padding(.vertical, DS.xs)
             HStack(spacing: DS.s) {
@@ -214,7 +221,7 @@ struct WorkspaceScopePicker: View {
     }
 
     @ViewBuilder
-    private func scopeRow(_ workspace: Workspace?) -> some View {
+    private func scopeRow(_ workspace: Workspace?, openCount: Int) -> some View {
         let isActive = workspace.map { $0.id.uuidString == scopeRaw } ?? (scopeRaw == "all")
         Button {
             withAnimation(.dsQuick) {
@@ -228,7 +235,7 @@ struct WorkspaceScopePicker: View {
                     Text(workspace?.name ?? "Tutti gli spazi")
                         .font(.dsMeta.weight(.medium))
                         .foregroundStyle(.primary)
-                    Text(subtitle(for: workspace))
+                    Text(subtitle(for: workspace, openCount: openCount))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -249,17 +256,12 @@ struct WorkspaceScopePicker: View {
         .dsHoverHighlight()
     }
 
-    private func subtitle(for workspace: Workspace?) -> String {
+    private func subtitle(for workspace: Workspace?, openCount: Int) -> String {
         guard let workspace else {
-            return "Vista combinata · \(openTasks.count) aperte"
+            return "Vista combinata · \(openCount) aperte"
         }
         let kind = workspace.isPersonal ? "Personale" : "Condiviso"
-        return "\(kind) · \(openCount(in: workspace)) aperte"
-    }
-
-    private func openCount(in workspace: Workspace?) -> Int {
-        guard let workspace else { return openTasks.count }
-        return openTasks.count { $0.workspaceID == workspace.id }
+        return "\(kind) · \(openCount) aperte"
     }
 
     /// Avatar dello scope: iniziale su gradiente per uno spazio,
@@ -295,4 +297,18 @@ struct WorkspaceScopePicker: View {
     }
     .padding()
     .modelContainer(PreviewSampleData.make().container)
+}
+
+/// #5 — I contatori per spazio servono solo a popover aperto: la query di
+/// tutte le attività aperte vive qui, non in ogni selettore montato.
+private struct OpenCountsReader<Content: View>: View {
+    @Query(filter: TodoTask.openPredicate) private var openTasks: [TodoTask]
+    let content: (_ byWorkspace: [UUID: Int], _ total: Int) -> Content
+
+    var body: some View {
+        content(
+            openTasks.reduce(into: [:]) { $0[$1.workspaceID, default: 0] += 1 },
+            openTasks.count
+        )
+    }
 }
