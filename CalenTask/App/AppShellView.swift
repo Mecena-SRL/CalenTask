@@ -10,6 +10,7 @@ struct AppShellView: View {
     private var configuration: AppConfiguration { .decode(configurationRaw) }
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.undoManager) private var undoManager
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -101,7 +102,7 @@ struct AppShellView: View {
             do {
                 try SeedService.ensureSeed(in: modelContext)
             } catch {
-                assertionFailure("Seed failed: \(error)")
+                reportFailure("Seed failed: \(error)")
             }
             WidgetBridge.refresh(in: modelContext)
             WeatherService.shared.refreshIfNeeded()
@@ -124,6 +125,10 @@ struct AppShellView: View {
                 if !configuration.isEnabled(.tags) { router.go(.calendar) }
             }
         }
+        // #22 — ⌘Z / ⇧⌘Z (e "scuoti per annullare" su iPhone) sulle modifiche
+        // ai dati: il contesto SwiftData usa l'undo manager della finestra.
+        .onAppear { modelContext.undoManager = undoManager }
+        .onChange(of: undoManager) { _, manager in modelContext.undoManager = manager }
         .onChange(of: scenePhase, initial: true) { _, phase in
             // Leaving the foreground is the moment to hand the widget
             // a fresh snapshot of today — and to riprogrammare il digest (D67).
