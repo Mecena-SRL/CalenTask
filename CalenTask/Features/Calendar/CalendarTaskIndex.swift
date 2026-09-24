@@ -23,9 +23,15 @@ struct CalendarTaskIndex {
         for task in tasks {
             let startDay = task.startAt.map { calendar.startOfDay(for: $0) }
             let dueDay = task.dueAt.map { calendar.startOfDay(for: $0) }
+            let continuation = Self.continuationDays(of: task, from: startDay, calendar: calendar)
+            // Fase 3 — un evento con orario che dura più giorni non è un
+            // blocco della griglia (sarebbe un rettangolo lungo fino a
+            // mezzanotte): sta nella fascia "tutto il giorno" come barra
+            // continua, come in Calendario di Apple.
+            let spansDays = !continuation.isEmpty
             if let startDay {
                 byDay[startDay, default: []].append(task)
-                if !task.allDay { timed[startDay, default: []].append(task) }
+                if !task.allDay && !spansDays { timed[startDay, default: []].append(task) }
             }
             // One item on a day even when both temporal facets land there.
             if let dueDay, dueDay != startDay {
@@ -34,11 +40,11 @@ struct CalendarTaskIndex {
             // #6 — eventi su più giorni (ferie, trasferte, riprese): compaiono
             // in ogni giorno coperto (corsia "tutto il giorno"), non solo nel
             // primo.
-            for day in Self.continuationDays(of: task, from: startDay, calendar: calendar) {
+            for day in continuation {
                 if day != dueDay { byDay[day, default: []].append(task) }
                 allDay[day, default: []].append(task)
             }
-            if task.allDay, let anchor = startDay ?? dueDay {
+            if (task.allDay || spansDays), let anchor = startDay ?? dueDay {
                 allDay[anchor, default: []].append(task)
             } else if startDay == nil, let dueDay {
                 allDay[dueDay, default: []].append(task)

@@ -57,6 +57,12 @@ struct CalendarScreen: View {
     /// Prima veniva ricostruito da zero a ogni frame anche per un pinch che
     /// non tocca affatto quali task esistono.
     @State private var calendarIndex = CalendarTaskIndex(tasks: [], calendar: Calendar.app)
+    /// Da dove entra il periodo nuovo: avanti da destra, indietro da sinistra.
+    @State private var navigationEdge: Edge = .trailing
+    /// Incrementato da "Oggi": le griglie tornano sull'ora corrente.
+    @State private var scrollToNowToken = 0
+    /// Larghezza del Mese: decide se il giorno scelto sta a lato della griglia.
+    @State private var monthWidth: CGFloat = 0
 
     @AppStorage("calendarViewMode") private var modeRaw = CalendarViewMode.month.rawValue
     /// Day sub-mode: agenda · griglia (time-blocking, D14).
@@ -65,6 +71,9 @@ struct CalendarScreen: View {
     @AppStorage("calendarHourHeight") private var hourHeightStored = 56.0
     /// E10 — heatmap densità nel mese (in Anno è sempre attiva).
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
+    @AppStorage("calendarShowsWeekNumbers") private var showsWeekNumbers = true
+    @AppStorage(CalendarWeekStyle.storageKey) private var weekStyleRaw = CalendarWeekStyle.grid.rawValue
+    @AppStorage(CalendarMonthStyle.storageKey) private var monthStyleRaw = CalendarMonthStyle.grid.rawValue
     /// S5 — vista N-giorni (la "settimana" può essere 2–9 giorni).
     @AppStorage("calendarWeekDayCount") private var weekDayCount = 7
     /// F30 — il trimestre si può togliere dalla barra delle viste.
@@ -75,6 +84,8 @@ struct CalendarScreen: View {
     @AppStorage("calendarHiddenProjects") private var hiddenProjectsRaw = ""
     @AppStorage(AppConfiguration.storageKey) private var configurationRaw = ""
     @AppStorage("weatherEnabled") private var weatherEnabled = true
+    @AppStorage(CalendarWorkHours.startKey) private var workStartHour = CalendarWorkHours.defaultStart
+    @AppStorage(CalendarWorkHours.endKey) private var workEndHour = CalendarWorkHours.defaultEnd
 
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var allProjects: [Project]
@@ -137,6 +148,25 @@ struct CalendarScreen: View {
     }
     private var visibleWeekStart: Date {
         visibleWeekDayCount == 7 ? weekStart : selectedDay.startOfDay
+    }
+
+    private var weekStyle: Binding<CalendarWeekStyle> {
+        Binding(get: { CalendarWeekStyle(rawValue: weekStyleRaw) ?? .grid },
+                set: { weekStyleRaw = $0.rawValue })
+    }
+
+    private var monthStyle: Binding<CalendarMonthStyle> {
+        Binding(get: { CalendarMonthStyle(rawValue: monthStyleRaw) ?? .grid },
+                set: { monthStyleRaw = $0.rawValue })
+    }
+
+    private var dayStyle: Binding<CalendarDayStyle> {
+        Binding(get: { CalendarDayStyle(rawValue: dayModeRaw) ?? .agenda },
+                set: { dayModeRaw = $0.rawValue })
+    }
+
+    private var workHours: Range<Int>? {
+        CalendarWorkHours.range(start: workStartHour, end: workEndHour)
     }
 
     /// Intervallo della densità oraria (altezza di un'ora).
@@ -206,6 +236,9 @@ struct CalendarScreen: View {
                 .id(mode)
                 .transition(.scale(scale: 0.97).combined(with: .opacity))
                 .simultaneousGesture(densityOrScalePinch)
+                #if os(iOS)
+                .simultaneousGesture(periodSwipe)
+                #endif
             }
             .background(DSColor.surfaceSecondary)
             .background {
@@ -295,11 +328,22 @@ struct CalendarScreen: View {
     private var controlBar: some View {
         VStack(spacing: DS.s) {
             HStack {
-                Text(periodTitle)
-                    .font(.dsSectionTitle)
-                    .id(periodTitle)
-                    .transition(.opacity)
+                ZStack(alignment: .leading) {
+                    Text(periodTitle)
+                        .font(.dsSectionTitle)
+                        .id(periodTitle)
+                        .transition(.push(from: navigationEdge == .trailing ? .bottom : .top))
+                }
+                .clipped()
                 Spacer()
+                if mode == .week {
+                    CalendarStyleToggle(selection: weekStyle, compact: true)
+                        .padding(.trailing, DS.s)
+                }
+                if mode == .month {
+                    CalendarStyleToggle(selection: monthStyle, compact: true)
+                        .padding(.trailing, DS.s)
+                }
                 if mode == .week, showsAdvancedViews {
                     // S5 — la "settimana" è elastica: 2–9 giorni.
                     Menu {
@@ -323,7 +367,7 @@ struct CalendarScreen: View {
                     .fixedSize()
                     .padding(.trailing, DS.s)
                 }
-                if mode == .month, showsSummary {
+                if mode == .month, showsSummary, monthStyle.wrappedValue == .grid {
                     // E10 — toggle heatmap densità (Timepage).
                     Button {
                         withAnimation(.dsQuick) { monthHeatmap.toggle() }
@@ -383,7 +427,7 @@ struct CalendarScreen: View {
         HStack(spacing: 0) {
             navButton("chevron.left") { shift(-1) }
             Button {
-                selectedDay = .now.startOfDay
+                goToToday()
             } label: {
                 Text("Oggi")
                     .font(.dsCaption.weight(.semibold))
@@ -447,10 +491,44 @@ struct CalendarScreen: View {
         case .quarter: (component, value) = (.month, delta * 3)
         case .year: (component, value) = (.year, delta)
         }
-        // Changing period replaces event data. A screen-wide spring made
-        // unrelated blocks interpolate between the old and new day's times.
-        selectedDay = calendar.date(byAdding: component, value: value, to: selectedDay) ?? selectedDay
+        go(to: calendar.date(byAdding: component, value: value, to: selectedDay) ?? selectedDay)
     }
+
+    /// Unico punto per cambiare giorno: fissa la direzione (il periodo nuovo
+    /// entra dal lato giusto) e anima. Gli eventi di ogni periodo sono un
+    /// layer a sé (`.id` + `.push`): non interpolano tra i due giorni.
+    private func go(to day: Date) {
+        let target = calendar.startOfDay(for: day)
+        guard target != selectedDay else { return }
+        navigationEdge = target > selectedDay ? .trailing : .leading
+        withAnimation(.dsSoft) { selectedDay = target }
+    }
+
+    /// "Oggi": torna al periodo di oggi e riporta le griglie sull'ora corrente.
+    private func goToToday() {
+        go(to: .now)
+        scrollToNowToken += 1
+    }
+
+    /// Selezione dal Mese: stessa animazione e direzione della navigazione.
+    private var selectedDayBinding: Binding<Date> {
+        Binding(get: { selectedDay }, set: { go(to: $0) })
+    }
+
+    #if os(iOS)
+    /// Swipe orizzontale: periodo successivo/precedente (come Calendario).
+    /// Solo gesti decisamente orizzontali, per non rubare lo scroll né il
+    /// trascinamento dei blocchi (verticale).
+    private var periodSwipe: some Gesture {
+        DragGesture(minimumDistance: 28)
+            .onEnded { value in
+                guard [.day, .week, .month].contains(mode) else { return }
+                let dx = value.translation.width, dy = value.translation.height
+                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.8 else { return }
+                shift(dx < 0 ? 1 : -1)
+            }
+    }
+    #endif
 
     private var weekStart: Date {
         calendar.dateInterval(of: .weekOfYear, for: selectedDay)?.start ?? selectedDay.startOfDay
@@ -488,11 +566,16 @@ struct CalendarScreen: View {
     private func dayHubHeader(_ data: CalendarTaskIndex) -> some View {
         VStack(alignment: .leading, spacing: DS.m) {
             if showsSummary || showsWeather {
-                DayHeaderView(day: selectedDay, tasks: data.tasks(on: selectedDay),
-                              showsSummary: showsSummary, showsWeather: showsWeather)
+                ZStack(alignment: .topLeading) {
+                    DayHeaderView(day: selectedDay, tasks: data.tasks(on: selectedDay),
+                                  showsSummary: showsSummary, showsWeather: showsWeather)
+                        .id(selectedDay)
+                        .transition(.push(from: navigationEdge))
+                }
+                .clipped()
             }
             HStack(spacing: DS.m) {
-                DayModeToggle(selection: $dayModeRaw)
+                CalendarStyleToggle(selection: dayStyle)
                 Spacer(minLength: 0)
                 if isDayGridLike {
                     densityControl
@@ -528,15 +611,23 @@ struct CalendarScreen: View {
                 day: selectedDay,
                 plannedTasks: data.timedTasks(on: selectedDay),
                 hourHeight: hourHeight,
-                people: people
+                people: people,
+                workHours: workHours,
+                transitionEdge: navigationEdge,
+                scrollToNowToken: scrollToNowToken
             )
             .padding([.horizontal, .bottom], DS.l)
             .padding(.top, DS.s)
         default:
             ScrollView {
-                DayAgendaView(day: selectedDay, tasks: data.tasks(on: selectedDay))
-                    .padding(DS.l)
+                ZStack(alignment: .top) {
+                    DayAgendaView(day: selectedDay, tasks: data.tasks(on: selectedDay))
+                        .id(selectedDay)
+                        .transition(.push(from: navigationEdge))
+                }
+                .padding(DS.l)
             }
+            .clipped()
         }
     }
 
@@ -582,40 +673,110 @@ struct CalendarScreen: View {
 
     // MARK: Settimana
 
+    @ViewBuilder
     private func weekContent(_ data: CalendarTaskIndex) -> some View {
-        WeekGridView(
-            // 7 giorni = settimana ancorata al lunedì; N giorni = dal selezionato.
-            weekStart: visibleWeekStart,
-            dayCount: visibleWeekDayCount,
-            data: data,
-            people: people,
-            showsWeather: showsWeather
-        ) { day in
-            withAnimation(.dsQuick) {
-                selectedDay = day.startOfDay
-                modeRaw = CalendarViewMode.day.rawValue
+        switch weekStyle.wrappedValue {
+        case .grid:
+            WeekGridView(
+                // 7 giorni = settimana ancorata al lunedì; N giorni = dal selezionato.
+                weekStart: visibleWeekStart,
+                dayCount: visibleWeekDayCount,
+                data: data,
+                people: people,
+                showsWeather: showsWeather,
+                workHours: workHours,
+                transitionEdge: navigationEdge,
+                scrollToNowToken: scrollToNowToken
+            ) { day in
+                openDay(day)
             }
+            .padding([.horizontal, .bottom], DS.l)
+            .transition(.opacity)
+        case .columns:
+            WeekColumnsView(
+                weekStart: visibleWeekStart,
+                dayCount: visibleWeekDayCount,
+                data: data,
+                workStartHour: workHours?.lowerBound ?? 9,
+                transitionEdge: navigationEdge
+            ) { day in
+                openDay(day)
+            }
+            .padding([.horizontal, .bottom], DS.l)
+            .transition(.opacity)
         }
-        .padding([.horizontal, .bottom], DS.l)
+    }
+
+    /// Dall'intestazione di un giorno (Settimana) alla vista Giorno.
+    private func openDay(_ day: Date) {
+        withAnimation(.dsQuick) {
+            selectedDay = day.startOfDay
+            modeRaw = CalendarViewMode.day.rawValue
+        }
     }
 
     // MARK: Mese
 
+    /// Mac/iPad larghi: la griglia riempie l'altezza (righe elastiche) e il
+    /// giorno scelto sta a lato. Più stretto o iPhone: griglia e giorno in
+    /// colonna, a scorrimento.
     private func monthContent(_ data: CalendarTaskIndex) -> some View {
-        ScrollView {
-            VStack(spacing: DS.xl) {
-                MonthGridView(
-                    month: CalendarMath.startOfMonth(for: selectedDay, calendar: calendar),
-                    selectedDay: $selectedDay,
-                    tasksByDay: data.tasksByDay,
-                    showsHeatmap: showsSummary && monthHeatmap,
-                    showsEventChips: showsRichMonth
-                )
-
-                monthDayDetail(data)
+        let monthStart = CalendarMath.startOfMonth(for: selectedDay, calendar: calendar)
+        return VStack(spacing: 0) {
+            if monthStyle.wrappedValue == .list {
+                ZStack(alignment: .top) {
+                    MonthListView(month: monthStart, selectedDay: selectedDayBinding,
+                                  tasksByDay: data.tasksByDay)
+                        .id(monthStart)
+                        .transition(.push(from: navigationEdge))
+                }
+                .clipped()
+            } else if showsRichMonth && monthWidth >= 860 {
+                HStack(alignment: .top, spacing: DS.l) {
+                    monthGrid(data, month: monthStart, fillsHeight: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView {
+                        monthDayDetail(data)
+                            .id(selectedDay)
+                            .transition(.opacity)
+                            .padding(.bottom, DS.l)
+                    }
+                    .frame(width: 300)
+                }
+                .padding(DS.l)
+            } else {
+                ScrollView {
+                    VStack(spacing: DS.xl) {
+                        monthGrid(data, month: monthStart, fillsHeight: false)
+                        monthDayDetail(data)
+                    }
+                    .padding(DS.l)
+                }
             }
-            .padding(DS.l)
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            monthWidth = width
+        }
+    }
+
+    /// La griglia del mese: il mese nuovo scivola dal lato giusto.
+    private func monthGrid(_ data: CalendarTaskIndex, month: Date, fillsHeight: Bool) -> some View {
+        ZStack(alignment: .top) {
+            MonthGridView(
+                month: month,
+                selectedDay: selectedDayBinding,
+                tasksByDay: data.tasksByDay,
+                showsHeatmap: showsSummary && monthHeatmap,
+                showsEventChips: showsRichMonth,
+                showsWeekNumbers: showsWeekNumbers,
+                fillsHeight: fillsHeight
+            )
+            .id(month)
+            .transition(.push(from: navigationEdge))
+        }
+        .clipped()
     }
 
     /// F24 — celle ricche dove lo spazio c'è: Mac sempre, iPad regular.
@@ -1194,7 +1355,7 @@ struct CalendarScreen: View {
             }
             return .ignored
         case "t", "T":
-            selectedDay = .now.startOfDay
+            goToToday()
             return .handled
         case "+", "=":
             guard isDayGridLike else { return .ignored }

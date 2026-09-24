@@ -859,6 +859,43 @@ struct DomainModelTests {
         #expect(SettingsPage.page(for: .tags) == .module(.activities))
     }
 
+    /// Fase 2: dagli eventi ai segmenti di una riga del Mese — barra su più
+    /// giorni (fine esclusiva a mezzanotte), evento con orario, scadenza
+    /// fuori dall'intervallo come segnaposto, barre tagliate ai bordi.
+    @Test func weekLayoutSegmentsFromTasks() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.app
+        let monday = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12))!
+        let days = (0..<7).map { calendar.date(byAdding: .day, value: $0, to: monday)! }
+        func at(_ day: Int, _ hour: Int) -> Date {
+            calendar.date(byAdding: .hour, value: day * 24 + hour, to: monday)!
+        }
+        func add(_ title: String, start: Date? = nil, end: Date? = nil, due: Date? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspace.id, title: title, kind: .event,
+                                startAt: start, endAt: end, dueAt: due, createdByID: me.id)
+            context.insert(task)
+            return task
+        }
+        let trip = add("Trasferta", start: at(1, 9), end: at(4, 0))          // mar → gio (fine a mezzanotte)
+        let meeting = add("Riunione", start: at(2, 10), end: at(2, 11), due: at(5, 18))
+        let long = add("Festival", start: at(-2, 9), end: at(9, 18))         // oltre la riga
+        let deadline = add("Consegna", due: at(6, 12))
+
+        let segments = CalendarWeekLayout.segments(for: [trip, meeting, long, deadline, trip],
+                                                   days: days, calendar: calendar)
+        func segment(_ task: TodoTask, _ kind: CalendarWeekLayout.Segment.Kind) -> CalendarWeekLayout.Segment? {
+            segments.first { $0.id == task.id && $0.kind == kind }
+        }
+        #expect(segments.count == 5)                                          // niente doppioni di "trip"
+        #expect(segment(trip, .span)?.start == 1 && segment(trip, .span)?.end == 3)
+        #expect(segment(meeting, .timed)?.start == 2)
+        #expect(segment(meeting, .due)?.start == 5)
+        #expect(segment(long, .span)?.continuesBefore == true && segment(long, .span)?.continuesAfter == true)
+        #expect(segment(deadline, .due)?.start == 6)
+    }
+
     @Test func calendarWindowPredicatesFilterInStore() throws {
         let container = try makeContainer()
         let context = container.mainContext

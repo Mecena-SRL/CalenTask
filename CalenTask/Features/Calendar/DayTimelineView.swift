@@ -19,8 +19,14 @@ struct DayTimelineView: View {
     var hourHeight: CGFloat = 56
     /// I membri dello spazio, per le iniziali dell'assegnatario sui blocchi.
     var people: [UserProfile] = []
+    /// Ore lavorative: fuori si ombreggia; decide anche dove si apre.
+    var workHours: Range<Int>?
+    /// Da dove entra il giorno nuovo (avanti = da destra).
+    var transitionEdge: Edge = .trailing
+    /// Cambia quando si preme "Oggi": la griglia torna sull'ora corrente.
+    var scrollToNowToken = 0
 
-    private let labelWidth: CGFloat = 48
+    private let labelWidth: CGFloat = 52
     private let snapMinutes = 15
     private let calendar = Calendar.app
 
@@ -32,84 +38,68 @@ struct DayTimelineView: View {
 
     // MARK: Grid
 
+    private var initialHour: Int {
+        CalendarGridMetrics.initialScrollHour(
+            showsToday: calendar.isDateInToday(day), now: .now,
+            workStart: workHours?.lowerBound ?? 8, calendar: calendar
+        )
+    }
+
     private var grid: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                ZStack(alignment: .topLeading) {
-                    hourLines
-                    nowIndicator
-                    interactiveLayer
+                HStack(alignment: .top, spacing: 0) {
+                    CalendarHourLabels(hourHeight: hourHeight, width: labelWidth, idPrefix: "hour-")
+                    ZStack(alignment: .topLeading) {
+                        CalendarHourGridCanvas(hourHeight: hourHeight, workHours: workHours)
+                        // Solo gli eventi cambiano col giorno: la griglia resta
+                        // ferma (e lo scroll al suo posto), il giorno nuovo
+                        // scivola dentro dal lato giusto.
+                        interactiveLayer
+                            .id(calendar.startOfDay(for: day))
+                            .transition(.push(from: transitionEdge))
+                    }
+                    .frame(height: hourHeight * 24)
+                    .clipped()
+                    .dropDestination(for: String.self) { items, location in
+                        handleDrop(items, at: location)
+                    } isTargeted: { _ in }
                 }
-                .frame(height: hourHeight * 24)
-                .dropDestination(for: String.self) { items, location in
-                    handleDrop(items, at: location)
-                } isTargeted: { _ in }
+                .overlay(alignment: .topLeading) {
+                    CalendarNowIndicator(
+                        hourHeight: hourHeight, labelWidth: labelWidth,
+                        todayColumn: calendar.isDateInToday(day) ? 0 : nil
+                    )
+                }
+                .padding(.vertical, DS.s)
             }
             .frame(maxHeight: .infinity)
             .background(DSColor.surface, in: RoundedRectangle(cornerRadius: DS.Radius.medium))
             .onAppear {
-                proxy.scrollTo("hour-8", anchor: .top)
+                proxy.scrollTo("hour-\(initialHour)", anchor: .top)
             }
-        }
-    }
-
-    private var hourLines: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { hour in
-                HStack(alignment: .top, spacing: DS.s) {
-                    Text(String(format: "%02d", hour))
-                        .font(.dsNumeric)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: labelWidth - DS.s, alignment: .trailing)
-                    VStack(spacing: 0) {
-                        Divider()
-                        Spacer()
-                        Rectangle()
-                            .fill(DSColor.hairline.opacity(0.4))
-                            .frame(height: 0.5)
-                        Spacer()
-                    }
-                }
-                .frame(height: hourHeight)
-                .id("hour-\(hour)")
+            .onChange(of: scrollToNowToken) { _, _ in
+                withAnimation(.dsSoft) { proxy.scrollTo("hour-\(initialHour)", anchor: .top) }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var nowIndicator: some View {
-        if calendar.isDate(day, inSameDayAs: .now) {
-            let minutes = minutesIntoDay(.now)
-            DSNowLine()
-                .offset(y: yPosition(forMinutes: minutes))
-                .padding(.leading, labelWidth - 4)
         }
     }
 
     /// Layer interattivo: superficie per creare (tap/press-drag), anteprima e
-    /// blocchi posizionati in colonne quando si sovrappongono.
+    /// blocchi a cascata quando si sovrappongono.
     private var interactiveLayer: some View {
         GeometryReader { geo in
-            let laneX = labelWidth + DS.s
+            let laneX: CGFloat = DS.xs
             let laneWidth = max(0, geo.size.width - laneX - DS.m)
             ZStack(alignment: .topLeading) {
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
-                    .padding(.leading, laneX)
                     .gesture(tapCreateGesture)
                     .simultaneousGesture(dragCreateGesture)
 
                 if let draft = draftRange {
-                    RoundedRectangle(cornerRadius: DS.Radius.small)
-                        .fill(Color.accentColor.opacity(0.22))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.small)
-                                .strokeBorder(Color.accentColor, lineWidth: 1)
-                        )
-                        .frame(width: laneWidth, height: max(draft.end - draft.start, 14))
+                    draftPreview(draft, width: laneWidth)
                         .offset(x: laneX, y: draft.start)
-                        .allowsHitTesting(false)
                 }
 
                 // Sovrapposizioni a CASCATA: le carte di un cluster si impilano
@@ -124,6 +114,27 @@ struct DayTimelineView: View {
                 )
             }
         }
+    }
+
+    /// Anteprima del blocco mentre si trascina per crearlo, con l'orario.
+    private func draftPreview(_ draft: (start: CGFloat, end: CGFloat), width: CGFloat) -> some View {
+        let startMinutes = snap(minutes(at: draft.start))
+        let endMinutes = max(snap(minutes(at: draft.end)), startMinutes + 15)
+        return RoundedRectangle(cornerRadius: DS.Radius.small)
+            .fill(Color.accentColor.opacity(0.22))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.small)
+                    .strokeBorder(Color.accentColor, lineWidth: 1)
+            )
+            .overlay(alignment: .topLeading) {
+                Text(CalendarGridMetrics.rangeLabel(startMinutes, endMinutes))
+                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    .foregroundStyle(Color.accentColor)
+                    .padding(DS.xs)
+            }
+            .frame(width: width, height: max(draft.end - draft.start, 14))
+            .allowsHitTesting(false)
+            .sensoryFeedback(.selection, trigger: endMinutes)
     }
 
     // MARK: Creazione (tap / press-drag)
@@ -163,29 +174,7 @@ struct DayTimelineView: View {
             bySettingHour: startM / 60, minute: startM % 60, second: 0, of: day
         ) else { return }
         let end = start.addingTimeInterval(TimeInterval((endM - startM) * 60))
-        do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
-            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
-            let task = TodoTask(
-                workspaceID: target.id,
-                title: "Nuova attività",
-                kind: .task,
-                startAt: start,
-                endAt: end,
-                createdByID: me.id
-            )
-            modelContext.insert(task)
-            try? modelContext.save()
-            NotificationService.shared.sync(task: task)
-            // "poi aggiungo i dati": apri subito l'editor.
-            #if os(macOS)
-            router.inspect(taskID: task.id)
-            #else
-            router.open(taskID: task.id)
-            #endif
-        } catch {
-            reportFailure("create timed task: \(error)")
-        }
+        CalendarActions.createTask(start: start, end: end, in: modelContext, router: router)
     }
 
     private func minutes(at y: CGFloat) -> Int {
@@ -196,16 +185,7 @@ struct DayTimelineView: View {
         (m / snapMinutes) * snapMinutes
     }
 
-    // MARK: Geometry & mutations
-
-    private func minutesIntoDay(_ date: Date) -> Int {
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
-    }
-
-    private func yPosition(forMinutes minutes: Int) -> CGFloat {
-        CGFloat(minutes) / 60 * hourHeight
-    }
+    // MARK: Drop
 
     private func handleDrop(_ items: [String], at location: CGPoint) -> Bool {
         guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }

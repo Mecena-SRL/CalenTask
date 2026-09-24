@@ -12,6 +12,9 @@ struct CalendarCascadeLayer: View {
 
     @State private var frontTaskID: UUID?
     @State private var hoveredTaskID: UUID?
+    /// Il blocco che si sta spostando/allungando: sopra a tutto, anche agli
+    /// altri cluster che attraversa.
+    @State private var draggingTaskID: UUID?
     private let calendar = Calendar.app
 
     var body: some View {
@@ -44,9 +47,16 @@ struct CalendarCascadeLayer: View {
                             } else if hoveredTaskID == task.id {
                                 hoveredTaskID = nil
                             }
+                        },
+                        onDragStateChange: { dragging in
+                            if dragging {
+                                draggingTaskID = task.id
+                            } else if draggingTaskID == task.id {
+                                draggingTaskID = nil
+                            }
                         }
                     )
-                    .zIndex(isFront ? 1000 : Double(depth))
+                    .zIndex(task.id == draggingTaskID ? 5000 : (isFront ? 1000 : Double(depth)))
                 }
             }
         }

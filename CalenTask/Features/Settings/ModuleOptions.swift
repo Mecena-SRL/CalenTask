@@ -30,6 +30,11 @@ private struct CalendarModuleOptions: View {
     @AppStorage("calendarWeekDayCount") private var weekDayCount = 7
     @AppStorage("calendarShowsQuarter") private var showsQuarter = true
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
+    @AppStorage("calendarShowsWeekNumbers") private var showsWeekNumbers = true
+    @AppStorage(CalendarWeekStyle.storageKey) private var weekStyleRaw = CalendarWeekStyle.grid.rawValue
+    @AppStorage(CalendarMonthStyle.storageKey) private var monthStyleRaw = CalendarMonthStyle.grid.rawValue
+    @AppStorage(CalendarWorkHours.startKey) private var workStart = CalendarWorkHours.defaultStart
+    @AppStorage(CalendarWorkHours.endKey) private var workEnd = CalendarWorkHours.defaultEnd
 
     private var advancedViews: Bool { configuration.isEnabled(.calendarAdvancedViews) }
 
@@ -50,11 +55,27 @@ private struct CalendarModuleOptions: View {
                 DSFieldRow(label: "Vista predefinita", systemImage: "calendar", tint: .red) { EmptyView() }
             }
             Picker(selection: $dayModeRaw) {
-                Text("Agenda").tag("agenda")
-                Text("Griglia oraria").tag("grid")
+                ForEach(CalendarDayStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
             } label: {
-                DSFieldRow(label: "Dettaglio giorno", systemImage: "calendar.day.timeline.left",
+                DSFieldRow(label: "Giorno", systemImage: "calendar.day.timeline.left",
                            tint: .blue) { EmptyView() }
+            }
+            Picker(selection: $weekStyleRaw) {
+                ForEach(CalendarWeekStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
+            } label: {
+                DSFieldRow(label: "Settimana", systemImage: "rectangle.split.3x1",
+                           tint: .teal) { EmptyView() }
+            }
+            Picker(selection: $monthStyleRaw) {
+                ForEach(CalendarMonthStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
+            } label: {
+                DSFieldRow(label: "Mese", systemImage: "calendar", tint: .red) { EmptyView() }
             }
             if advancedViews {
                 Picker(selection: $weekDayCount) {
@@ -68,11 +89,41 @@ private struct CalendarModuleOptions: View {
                 SettingsToggleRow(title: "Trimestre", detail: "La vista per pianificare a lungo termine (anche le tasse).",
                                   systemImage: "calendar.badge.clock", tint: .purple, isOn: $showsQuarter)
             }
+            SettingsToggleRow(title: "Numeri della settimana",
+                              detail: "Nel Mese, a sinistra di ogni riga (su Mac e iPad).",
+                              systemImage: "number.square", tint: .gray, isOn: $showsWeekNumbers)
             SettingsToggleRow(title: "Mappa di calore del mese",
                               detail: "Colora i giorni in base a quanto sono pieni. In Anno è sempre attiva.",
                               systemImage: "square.grid.3x3.fill", tint: .orange, isOn: $monthHeatmap)
         } header: {
             Text("Viste")
+        }
+
+        Section {
+            Picker(selection: Binding(get: { workStart }, set: { value in
+                workStart = value
+                if workEnd <= value { workEnd = min(value + 1, 24) }
+            })) {
+                ForEach(0..<24, id: \.self) { hour in
+                    Text(CalendarGridMetrics.clockLabel(hour * 60)).tag(hour)
+                }
+            } label: {
+                DSFieldRow(label: "Inizio", systemImage: "sunrise", tint: .orange) { EmptyView() }
+            }
+            Picker(selection: Binding(get: { workEnd }, set: { value in
+                workEnd = value
+                if workStart >= value { workStart = max(value - 1, 0) }
+            })) {
+                ForEach(1...24, id: \.self) { hour in
+                    Text(CalendarGridMetrics.clockLabel(hour * 60)).tag(hour)
+                }
+            } label: {
+                DSFieldRow(label: "Fine", systemImage: "sunset", tint: .indigo) { EmptyView() }
+            }
+        } header: {
+            Text("Orario di lavoro")
+        } footer: {
+            Text("Nelle griglie di Giorno e Settimana le ore fuori orario sono più tenui, e la giornata si apre dall'inizio del lavoro (o dall'ora attuale, se è oggi).")
         }
 
         Section {
