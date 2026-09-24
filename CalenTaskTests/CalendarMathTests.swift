@@ -121,3 +121,55 @@ struct CalendarGridMetricsTests {
         #expect(CalendarGridMetrics.rangeLabel(570, 660) == "09:30 – 11:00")
     }
 }
+
+/// Fase 2: corsie di una riga-settimana (barre multi-giorno, "+N").
+@MainActor
+struct CalendarWeekLayoutTests {
+    private typealias Segment = CalendarWeekLayout.Segment
+    private let a = UUID(), b = UUID(), c = UUID(), d = UUID(), e = UUID()
+
+    @Test func longestSpansGetTheTopLanes() {
+        let layout = CalendarWeekLayout(columns: 7, segments: [
+            Segment(id: c, start: 1, end: 1),
+            Segment(id: b, start: 2, end: 5, kind: .span),
+            Segment(id: a, start: 0, end: 3, kind: .span),
+        ])
+        let lanes = Dictionary(uniqueKeysWithValues: layout.placements.map { ($0.segment.id, $0.lane) })
+        #expect(lanes[a] == 0)      // lunga e prima
+        #expect(lanes[b] == 1)      // lunga, si sovrappone ad A
+        #expect(lanes[c] == 1)      // corta: la colonna 1 è libera nella corsia 1
+        #expect(layout.laneCount == 2)
+    }
+
+    @Test func overflowTurnsTheLastLaneIntoPlusN() {
+        let layout = CalendarWeekLayout(columns: 7, segments: [
+            Segment(id: a, start: 0, end: 0, sortKey: .init(timeIntervalSince1970: 1)),
+            Segment(id: b, start: 0, end: 0, sortKey: .init(timeIntervalSince1970: 2)),
+            Segment(id: c, start: 0, end: 0, sortKey: .init(timeIntervalSince1970: 3)),
+            Segment(id: d, start: 0, end: 0, sortKey: .init(timeIntervalSince1970: 4)),
+            // Barra lunga: prende la corsia 0 accanto alla colonna che trabocca.
+            Segment(id: e, start: 1, end: 3, kind: .span),
+        ])
+        #expect(layout.overflowingColumns(maxLanes: 3) == [0])
+        let visible = Set(layout.visiblePlacements(maxLanes: 3).map(\.segment.id))
+        #expect(visible.contains(e))            // la barra (corsia 0) si vede
+        #expect(visible.contains(a) && visible.contains(b))
+        #expect(!visible.contains(c) && !visible.contains(d))
+        #expect(layout.hiddenCounts(maxLanes: 3)[0] == 2)
+        #expect(layout.hiddenCounts(maxLanes: 3)[1] == 0)
+        // Con spazio per tutto, niente "+N".
+        #expect(layout.hiddenCounts(maxLanes: 4) == Array(repeating: 0, count: 7))
+    }
+
+    @Test func segmentsAreClampedToTheRow() {
+        let layout = CalendarWeekLayout(columns: 7, segments: [
+            Segment(id: a, start: -3, end: 2, kind: .span, continuesBefore: true),
+            Segment(id: b, start: 5, end: 12, kind: .span, continuesAfter: true),
+            Segment(id: c, start: 8, end: 9),
+        ])
+        let byID = Dictionary(uniqueKeysWithValues: layout.placements.map { ($0.segment.id, $0.segment) })
+        #expect(byID[a]?.start == 0 && byID[a]?.end == 2)
+        #expect(byID[b]?.start == 5 && byID[b]?.end == 6)
+        #expect(byID[c] == nil)
+    }
+}

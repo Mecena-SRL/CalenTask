@@ -61,6 +61,8 @@ struct CalendarScreen: View {
     @State private var navigationEdge: Edge = .trailing
     /// Incrementato da "Oggi": le griglie tornano sull'ora corrente.
     @State private var scrollToNowToken = 0
+    /// Larghezza del Mese: decide se il giorno scelto sta a lato della griglia.
+    @State private var monthWidth: CGFloat = 0
 
     @AppStorage("calendarViewMode") private var modeRaw = CalendarViewMode.month.rawValue
     /// Day sub-mode: agenda · griglia (time-blocking, D14).
@@ -69,6 +71,7 @@ struct CalendarScreen: View {
     @AppStorage("calendarHourHeight") private var hourHeightStored = 56.0
     /// E10 — heatmap densità nel mese (in Anno è sempre attiva).
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
+    @AppStorage("calendarShowsWeekNumbers") private var showsWeekNumbers = true
     /// S5 — vista N-giorni (la "settimana" può essere 2–9 giorni).
     @AppStorage("calendarWeekDayCount") private var weekDayCount = 7
     /// F30 — il trimestre si può togliere dalla barra delle viste.
@@ -667,26 +670,58 @@ struct CalendarScreen: View {
 
     // MARK: Mese
 
+    /// Mac/iPad larghi: la griglia riempie l'altezza (righe elastiche) e il
+    /// giorno scelto sta a lato. Più stretto o iPhone: griglia e giorno in
+    /// colonna, a scorrimento.
     private func monthContent(_ data: CalendarTaskIndex) -> some View {
-        ScrollView {
-            VStack(spacing: DS.xl) {
-                ZStack(alignment: .top) {
-                    MonthGridView(
-                        month: CalendarMath.startOfMonth(for: selectedDay, calendar: calendar),
-                        selectedDay: selectedDayBinding,
-                        tasksByDay: data.tasksByDay,
-                        showsHeatmap: showsSummary && monthHeatmap,
-                        showsEventChips: showsRichMonth
-                    )
-                    .id(CalendarMath.startOfMonth(for: selectedDay, calendar: calendar))
-                    .transition(.push(from: navigationEdge))
+        let monthStart = CalendarMath.startOfMonth(for: selectedDay, calendar: calendar)
+        return VStack(spacing: 0) {
+            if showsRichMonth && monthWidth >= 860 {
+                HStack(alignment: .top, spacing: DS.l) {
+                    monthGrid(data, month: monthStart, fillsHeight: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView {
+                        monthDayDetail(data)
+                            .id(selectedDay)
+                            .transition(.opacity)
+                            .padding(.bottom, DS.l)
+                    }
+                    .frame(width: 300)
                 }
-                .clipped()
-
-                monthDayDetail(data)
+                .padding(DS.l)
+            } else {
+                ScrollView {
+                    VStack(spacing: DS.xl) {
+                        monthGrid(data, month: monthStart, fillsHeight: false)
+                        monthDayDetail(data)
+                    }
+                    .padding(DS.l)
+                }
             }
-            .padding(DS.l)
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            monthWidth = width
+        }
+    }
+
+    /// La griglia del mese: il mese nuovo scivola dal lato giusto.
+    private func monthGrid(_ data: CalendarTaskIndex, month: Date, fillsHeight: Bool) -> some View {
+        ZStack(alignment: .top) {
+            MonthGridView(
+                month: month,
+                selectedDay: selectedDayBinding,
+                tasksByDay: data.tasksByDay,
+                showsHeatmap: showsSummary && monthHeatmap,
+                showsEventChips: showsRichMonth,
+                showsWeekNumbers: showsWeekNumbers,
+                fillsHeight: fillsHeight
+            )
+            .id(month)
+            .transition(.push(from: navigationEdge))
+        }
+        .clipped()
     }
 
     /// F24 — celle ricche dove lo spazio c'è: Mac sempre, iPad regular.
