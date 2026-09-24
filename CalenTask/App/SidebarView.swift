@@ -196,7 +196,7 @@ struct SidebarView: View {
     // MARK: Righe
 
     private func sidebarProjectRow(_ project: Project) -> some View {
-        let open = project.tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isPhase }.count
+        let open = project.tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isPhase && !$0.isTemplate }.count
         return HStack(spacing: DS.s) {
             Circle()
                 .fill(Color(hex: project.colorHex).gradient)
@@ -222,7 +222,7 @@ struct SidebarView: View {
     }
 
     private func tagRow(_ tag: Tag) -> some View {
-        let count = tag.tasks.filter { $0.deletedAt == nil && !$0.isDone }.count
+        let count = tag.tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isTemplate }.count
         return Label {
             Text(tag.name)
                 .font(.dsMeta)

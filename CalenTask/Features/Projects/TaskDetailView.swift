@@ -25,6 +25,17 @@ struct TaskDetailView: View {
 
     @State private var newSubtaskTitle = ""
 
+    /// #3 — Impronta dei campi testuali legati direttamente al modello
+    /// (titolo, note, luogo, link). All'uscita si passa dal funnel
+    /// (`touch()` → notifiche, EventKit, iCloud) SOLO se sono cambiati: prima
+    /// ogni semplice apertura riscriveva l'attività ovunque.
+    private struct TextSnapshot {
+        let task: TodoTask
+        let fingerprint: [String]
+    }
+
+    @State private var textSnapshot: TextSnapshot?
+
     var body: some View {
         Form {
             Section {
@@ -280,11 +291,15 @@ struct TaskDetailView: View {
             }
         }
         .formStyle(.grouped)
-        // Title edits bind directly; one sync when leaving covers them.
-        .onDisappear {
-            TagService.syncTags(for: task, in: modelContext)
-            task.touch()
+        // Title/notes edits bind directly; one sync when leaving covers them —
+        // only if something actually changed (#3). Also flushed when the
+        // inspector switches to another task without disappearing.
+        .onAppear { takeTextSnapshot() }
+        .onChange(of: task.id) { _, _ in
+            flushTextEdits()
+            takeTextSnapshot()
         }
+        .onDisappear { flushTextEdits() }
         .navigationTitle("Attività")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -292,6 +307,23 @@ struct TaskDetailView: View {
     }
 
     // MARK: Bindings through the mutation funnel
+
+    private static func textFingerprint(of task: TodoTask) -> [String] {
+        [task.title, task.notes, task.locationName ?? "", task.videoCallURLString ?? ""]
+    }
+
+    private func takeTextSnapshot() {
+        textSnapshot = TextSnapshot(task: task, fingerprint: Self.textFingerprint(of: task))
+    }
+
+    private func flushTextEdits() {
+        guard let snapshot = textSnapshot else { return }
+        let current = Self.textFingerprint(of: snapshot.task)
+        textSnapshot = TextSnapshot(task: snapshot.task, fingerprint: current)
+        guard current != snapshot.fingerprint, snapshot.task.modelContext != nil else { return }
+        TagService.syncTags(for: snapshot.task, in: modelContext)
+        snapshot.task.touch()
+    }
 
     private var kindBinding: Binding<TaskKind> {
         Binding(get: { task.kind }, set: { task.kind = $0; task.touch() })

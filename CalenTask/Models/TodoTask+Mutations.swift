@@ -6,9 +6,6 @@ import SwiftData
 extension TodoTask {
     @MainActor
     func toggleDone() {
-        if !isDone, hasRecurrence {
-            spawnNextOccurrence()
-        }
         setStatus(isDone ? .todo : .done)
     }
 
@@ -16,6 +13,11 @@ extension TodoTask {
     @MainActor
     func setStatus(_ newStatus: TaskStatus) {
         guard status != newStatus else { return }
+        // #8 — la prossima occorrenza nasce da QUALSIASI completamento
+        // (menu Stato, Kanban, pannello Oggi…), non solo dal checkbox.
+        if newStatus == .done, hasRecurrence {
+            spawnNextOccurrence()
+        }
         status = newStatus
         completedAt = newStatus == .done ? .now : nil
         touch()
@@ -114,6 +116,13 @@ extension TodoTask {
             let probe = nextDue ?? nextStart ?? .distantFuture
             guard probe <= recurrenceEndAt else { return }
         }
+        let plannedDue = dueAt == nil ? nil : nextDue
+        let plannedStart = startAt == nil ? nil : nextStart
+        // #8 — completa → riapri → ricompleta non duplica: se la prossima
+        // occorrenza esiste già (viva e aperta), non se ne crea un'altra.
+        guard !nextOccurrenceExists(due: plannedDue, start: plannedStart, in: context) else {
+            return
+        }
 
         let nextTask = TodoTask(
             workspaceID: workspaceID,
@@ -121,9 +130,9 @@ extension TodoTask {
             notes: notes,
             kind: kind,
             priority: priority,
-            startAt: startAt == nil ? nil : nextStart,
+            startAt: plannedStart,
             endAt: shiftedEnd(nextStart: nextStart),
-            dueAt: dueAt == nil ? nil : nextDue,
+            dueAt: plannedDue,
             remindAt: shiftedRemind(calendar: calendar),
             allDay: allDay,
             timeZoneID: timeZoneID,
@@ -140,10 +149,32 @@ extension TodoTask {
         nextTask.recurrenceInterval = recurrenceInterval
         nextTask.recurrenceModeRaw = recurrenceModeRaw
         nextTask.recurrenceEndAt = recurrenceEndAt
+        // #8 — la serie non perde pezzi: colore, viaggio, fase della
+        // pipeline e tag seguono l'occorrenza successiva.
+        nextTask.colorHex = colorHex
+        nextTask.travelMinutes = travelMinutes
+        nextTask.stageID = stageID
         context.insert(nextTask)
         nextTask.project = project
         nextTask.parentTask = parentTask
+        nextTask.tags = tags
         NotificationService.shared.sync(task: nextTask)
+    }
+
+    private func nextOccurrenceExists(due: Date?, start: Date?, in context: ModelContext) -> Bool {
+        let title = self.title
+        let frequencyRaw = recurrenceFrequencyRaw
+        let doneRaw = TaskStatus.done.rawValue
+        let ownID = id
+        let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate {
+            $0.title == title && $0.deletedAt == nil && $0.statusRaw != doneRaw
+                && $0.recurrenceFrequencyRaw == frequencyRaw && $0.id != ownID
+        })
+        let candidates = (try? context.fetch(descriptor)) ?? []
+        let projectID = project?.id
+        return candidates.contains {
+            $0.dueAt == due && $0.startAt == start && $0.project?.id == projectID
+        }
     }
 
     /// Preserves the event duration when the series advances.

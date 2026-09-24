@@ -271,8 +271,9 @@ struct WeekGridView: View {
         let end = start.addingTimeInterval(TimeInterval((endM - startM) * 60))
         do {
             let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
             let task = TodoTask(
-                workspaceID: workspace.id,
+                workspaceID: target.id,
                 title: "Nuova attività",
                 kind: .task,
                 startAt: start,

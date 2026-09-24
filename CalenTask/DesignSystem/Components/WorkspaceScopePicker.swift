@@ -21,6 +21,19 @@ enum WorkspaceScope {
     /// uno solo; altrimenti lo spazio personale. Un solo resolver, usato da
     /// ogni punto di creazione, così creare non ti fa più "perdere" ciò che
     /// appena creato dallo spazio attivo.
+    /// #7 — Stesso resolver per chi non ha gli spazi in una `@Query` (le
+    /// griglie del Calendario): legge lo scope globale salvato e, se non
+    /// punta a uno spazio vivo, ricade su `fallback` (lo spazio personale).
+    @MainActor
+    static func creationTarget(in context: ModelContext, fallback: Workspace) -> Workspace {
+        let raw = UserDefaults.standard.string(forKey: storageKey) ?? "all"
+        guard raw != "all", let id = UUID(uuidString: raw) else { return fallback }
+        let descriptor = FetchDescriptor<Workspace>(
+            predicate: #Predicate { $0.id == id && $0.deletedAt == nil }
+        )
+        return (try? context.fetch(descriptor).first) ?? fallback
+    }
+
     static func creationTarget(raw: String, workspaces: [Workspace]) -> Workspace? {
         if raw != "all", let id = UUID(uuidString: raw),
            let match = workspaces.first(where: { $0.id == id && $0.deletedAt == nil }) {

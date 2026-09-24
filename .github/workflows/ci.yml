@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-tests:
+    name: Test (macOS)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -destination 'platform=macOS' \
+            -only-testing:CalenTaskTests \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee xcodebuild-test.log | grep -E "error:|warning: .*CalenTask/|Test (Suite|Case)|✔|✘|\*\* (TEST|BUILD)" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log
+
+  ios-build:
+    name: Build (iOS Simulator)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee xcodebuild-ios.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-ios.log

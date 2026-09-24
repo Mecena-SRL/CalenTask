@@ -124,12 +124,17 @@ struct AppShellView: View {
                 if !configuration.isEnabled(.tags) { router.go(.calendar) }
             }
         }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase, initial: true) { _, phase in
             // Leaving the foreground is the moment to hand the widget
             // a fresh snapshot of today — and to riprogrammare il digest (D67).
             if phase == .background || phase == .inactive {
                 WidgetBridge.refresh(in: modelContext)
                 scheduleDigest()
+            }
+            // #4 — all'avvio e a ogni ritorno in primo piano: riallinea le
+            // notifiche (anche delle attività arrivate da iCloud).
+            if phase == .active {
+                NotificationService.shared.resyncAll(in: modelContext)
             }
         }
     }

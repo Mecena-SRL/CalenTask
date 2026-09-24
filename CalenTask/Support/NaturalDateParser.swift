@@ -72,7 +72,19 @@ enum NaturalDateParser {
             break
         }
 
-        let timeMatch = firstMatch(of: #"(?i)\b"# + timePattern + #"\b"#, in: text)
+        // Date numeriche all'italiana (giorno/mese[/anno]): prima finivano a
+        // NSDataDetector, che segue la lingua di sistema — su un Mac in
+        // inglese "12/09" diventava il 9 dicembre.
+        if baseDay == nil, let numeric = numericDate(in: text, now: now, calendar: calendar) {
+            baseDay = numeric.day
+            dayRange = numeric.range
+        }
+
+        var timeMatch = firstMatch(of: #"(?i)\b"# + timePattern + #"\b"#, in: text)
+        // "15:30" senza "alle": con i due punti è un orario inequivocabile.
+        if timeMatch == nil {
+            timeMatch = firstMatch(of: #"\b(\d{1,2}):(\d{2})\b"#, in: text)
+        }
         var explicitHour: Int?
         var explicitMinute = 0
         if let timeMatch,
@@ -105,6 +117,44 @@ enum NaturalDateParser {
         if let dayRange { ranges.append(dayRange) }
         if explicitHour != nil, let timeMatch { ranges.append(timeMatch.range) }
         return Match(date: date, hasTime: hasTime, cleanedText: cleaned(text, removing: ranges))
+    }
+
+    /// "12/09", "12/09/2026", "12/9/26", "12.09.2026" — sempre giorno/mese.
+    private static func numericDate(
+        in text: String, now: Date, calendar: Calendar
+    ) -> (day: Date, range: Range<String.Index>)? {
+        let patterns = [
+            #"\b(\d{1,2})/(\d{1,2})(?:/(\d{4}|\d{2}))?\b"#,
+            #"\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\b"#,
+        ]
+        for pattern in patterns {
+            guard let hit = firstMatch(of: pattern, in: text),
+                  hit.captures.count >= 2,
+                  let dayRange = hit.captures[0], let monthRange = hit.captures[1],
+                  let dayNumber = Int(text[dayRange]), let month = Int(text[monthRange])
+            else { continue }
+            var year: Int?
+            if hit.captures.count > 2, let yearRange = hit.captures[2],
+               let value = Int(text[yearRange]) {
+                year = value < 100 ? 2000 + value : value
+            }
+            var components = DateComponents(
+                year: year ?? calendar.component(.year, from: now), month: month, day: dayNumber
+            )
+            guard let date = calendar.date(from: components),
+                  calendar.component(.day, from: date) == dayNumber,
+                  calendar.component(.month, from: date) == month
+            else { continue }   // 31/02, 15/30 …
+            // Senza anno: la prossima occorrenza (una cattura guarda avanti).
+            if year == nil, date < calendar.startOfDay(for: now) {
+                components.year = (components.year ?? 0) + 1
+                if let next = calendar.date(from: components) {
+                    return (calendar.startOfDay(for: next), hit.range)
+                }
+            }
+            return (calendar.startOfDay(for: date), hit.range)
+        }
+        return nil
     }
 
     private static func next(weekday: Int, after now: Date, _ calendar: Calendar) -> Date {

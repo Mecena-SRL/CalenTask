@@ -268,6 +268,13 @@ struct DomainModelTests {
             try context.fetch(FetchDescriptor<TodoTask>()).first { $0.title.hasPrefix("Preparare export") }
         )
         #expect(created.title == "Preparare export — Montaggio v3")
+
+        // #10 — fuori e di nuovo dentro lo stadio: nessun follow-up doppio.
+        task.move(toStage: nil)
+        task.move(toStage: approved)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<TodoTask>())
+            .filter { $0.title.hasPrefix("Preparare export") }.count == 1)
         #expect(created.assigneeID == me.id)
         #expect(created.project?.id == project.id)
         let expectedDue = Calendar.current.date(byAdding: .day, value: 2, to: .now.startOfDay)
@@ -577,12 +584,19 @@ struct DomainModelTests {
 
         task.toggleDone()     // completa → genera la prossima
         task.toggleDone()     // riapre → NON deve generarne un'altra
-        task.toggleDone()     // ricompleta → ne genera una sola in più
+        task.toggleDone()     // ricompleta → la prossima esiste già: nessun doppione (#8)
         try context.save()
 
         let clones = try context.fetch(FetchDescriptor<TodoTask>())
             .filter { $0.title == "Report mensile" }
-        #expect(clones.count == 3)   // originale + 2 spawn (uno per completamento)
+        #expect(clones.count == 2)   // originale + UNA sola occorrenza successiva
+
+        // Completare dal menu Stato (setStatus) genera la successiva come il checkbox.
+        let next = try #require(clones.first { $0.id != task.id })
+        next.setStatus(.done)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<TodoTask>())
+            .filter { $0.title == "Report mensile" }.count == 3)
     }
 
     @Test func dueFireDateMovesMidnightToNineKeepsExplicitTimes() {
@@ -595,6 +609,31 @@ struct DomainModelTests {
         let explicit = calendar.date(bySettingHour: 17, minute: 45, second: 0,
                                      of: .now)!
         #expect(NotificationService.dueFireDate(for: explicit) == explicit)
+    }
+
+    /// #4 — gli avvisi dell'evento generano notifiche; quelli passati no;
+    /// completate e template non notificano.
+    @Test func eventAlertsAreScheduledRelativeToStart() {
+        let now = Date.now
+        let start = now.addingTimeInterval(2 * 3600)
+        let task = TodoTask(workspaceID: UUID(), title: "Riunione", kind: .event,
+                            startAt: start, alertOffsetsMinutes: [15, 60, 180, 15],
+                            createdByID: UUID())
+        let schedule = NotificationService.plannedSchedule(for: task, now: now)
+        let alertIDs = Set(schedule.map { $0.id }.filter { $0.contains("-alert-") })
+        #expect(alertIDs == [
+            NotificationService.alertID(task.id, minutesBefore: 15),
+            NotificationService.alertID(task.id, minutesBefore: 60),
+        ])   // -180 min è già passato, il doppione 15 conta una volta
+        let fifteen = schedule.first { $0.id == NotificationService.alertID(task.id, minutesBefore: 15) }
+        #expect(fifteen?.fireDate == start.addingTimeInterval(-15 * 60))
+        #expect(schedule.allSatisfy { $0.id.hasPrefix(NotificationService.taskPrefix(task.id)) })
+
+        task.statusRaw = TaskStatus.done.rawValue
+        #expect(NotificationService.plannedSchedule(for: task, now: now).isEmpty)
+        task.statusRaw = TaskStatus.todo.rawValue
+        task.isTemplate = true
+        #expect(NotificationService.plannedSchedule(for: task, now: now).isEmpty)
     }
 
     @Test func freeSlotsSkipBusyIntervals() throws {

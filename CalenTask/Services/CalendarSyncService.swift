@@ -170,13 +170,26 @@ final class CalendarSyncService {
               task.kind == .event, !task.isTemplate
         else { return }
 
-        if task.deletedAt != nil {
-            removeRemoteEvent(for: task)
-            return
+        // #3 — coalescing: un DatePicker o un drag producono decine di
+        // `touch()` al secondo; su EventKit ne arriva uno solo per task,
+        // a raffica finita.
+        let id = task.id
+        pendingPushes[id]?.cancel()
+        pendingPushes[id] = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            self.pendingPushes[id] = nil
+            if task.deletedAt != nil {
+                self.removeRemoteEvent(for: task)
+                return
+            }
+            guard task.startAt != nil else { return }
+            try? self.push(task)
         }
-        guard task.startAt != nil else { return }
-        try? push(task)
     }
+
+    @ObservationIgnored
+    private var pendingPushes: [UUID: Task<Void, Never>] = [:]
 
     private func push(_ task: TodoTask) throws {
         guard let startAt = task.startAt else { return }
