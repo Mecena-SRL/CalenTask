@@ -1,0 +1,84 @@
+name: DMG
+
+# DMG di prova per macOS, NON firmato con certificato Apple (firma ad-hoc):
+# niente iCloud né App Group (il widget resta vuoto), dati solo locali.
+# Si lancia a mano da Actions › DMG › Run workflow; l'artifact resta 14 giorni.
+# Con `release_tag` (es. v0.0.1) l'app prende quella versione e il DMG viene
+# allegato a una release BOZZA con quel tag (da pubblicare a mano).
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag della release bozza (es. v0.0.1); vuoto = solo artifact"
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - .github/workflows/dmg.yml
+
+jobs:
+  dmg:
+    name: DMG (macOS, firma ad-hoc)
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Release
+        run: |
+          set -o pipefail
+          VERSION_ARGS=()
+          if [ -n "$RELEASE_TAG" ]; then
+            VERSION_ARGS=(MARKETING_VERSION="${RELEASE_TAG#v}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
+          fi
+          xcodebuild build \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            "${VERSION_ARGS[@]}" \
+            | tee xcodebuild-dmg.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-dmg.log
+      - name: Firma ad-hoc e DMG
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/CalenTask.app"
+          test -d "$APP"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p dmg
+          cp -R "$APP" dmg/
+          ln -s /Applications dmg/Applications
+          if [ -n "$RELEASE_TAG" ]; then
+            NAME="CalenTask-$RELEASE_TAG"
+          else
+            NAME="CalenTask-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          hdiutil create -volname "CalenTask" -srcfolder dmg -ov -format UDZO "$NAME.dmg"
+          echo "DMG_NAME=$NAME" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DMG_NAME }}
+          path: ${{ env.DMG_NAME }}.dmg
+          retention-days: 14
+      - name: Release bozza
+        if: env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          Build di prova per macOS 26 (universale), **firma ad-hoc**: niente iCloud né widget, dati solo su questo Mac.
+
+          **Installazione**: apri il DMG e trascina CalenTask in Applicazioni. Al primo avvio macOS la blocca: Impostazioni di Sistema › Privacy e sicurezza › "Apri comunque" (oppure `xattr -dr com.apple.quarantine /Applications/CalenTask.app`).
+          EOF
+          echo "" >> notes.md
+          echo "Commit: $GITHUB_SHA" >> notes.md
+          gh release create "$RELEASE_TAG" "$DMG_NAME.dmg" \
+            --draft --target "$GITHUB_SHA" \
+            --title "CalenTask $RELEASE_TAG" --notes-file notes.md
