@@ -1,0 +1,48 @@
+name: DMG
+
+# DMG di prova per macOS, NON firmato con certificato Apple (firma ad-hoc):
+# niente iCloud né App Group (il widget resta vuoto), dati solo locali.
+# Si lancia a mano da Actions › DMG › Run workflow; l'artifact resta 14 giorni.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/dmg.yml
+
+jobs:
+  dmg:
+    name: DMG (macOS, firma ad-hoc)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Release
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee xcodebuild-dmg.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-dmg.log
+      - name: Firma ad-hoc e DMG
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/CalenTask.app"
+          test -d "$APP"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p dmg
+          cp -R "$APP" dmg/
+          ln -s /Applications dmg/Applications
+          NAME="CalenTask-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          hdiutil create -volname "CalenTask" -srcfolder dmg -ov -format UDZO "$NAME.dmg"
+          echo "DMG_NAME=$NAME" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DMG_NAME }}
+          path: ${{ env.DMG_NAME }}.dmg
+          retention-days: 14
