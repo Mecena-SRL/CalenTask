@@ -48,6 +48,36 @@ extension TodoTask {
         touch()
     }
 
+    /// Inizio e fine restano in ordine: spostare l'inizio oltre la fine si
+    /// porta dietro la fine (stessa durata). Un intervallo rovesciato
+    /// (fine prima dell'inizio) mandava in crash l'agenda del giorno.
+    @MainActor
+    func setStart(_ date: Date?) {
+        guard startAt != date else { return }
+        let previousStart = startAt
+        startAt = date
+        if let date, let end = endAt, end < date {
+            let duration = previousStart.map { end.timeIntervalSince($0) } ?? 0
+            endAt = date.addingTimeInterval(max(0, duration))
+        }
+        touch()
+    }
+
+    /// Una fine prima dell'inizio si ferma all'inizio.
+    @MainActor
+    func setEnd(_ date: Date?) {
+        let clamped = Self.orderedEnd(date, start: startAt)
+        guard endAt != clamped else { return }
+        endAt = clamped
+        touch()
+    }
+
+    /// La fine mai prima dell'inizio (nil resta nil).
+    nonisolated static func orderedEnd(_ end: Date?, start: Date?) -> Date? {
+        guard let end, let start else { return end }
+        return max(end, start)
+    }
+
     /// A3 (audit account): riallinea `workspaceID` al progetto scelto, così
     /// l'invariante task/progetto/spazio non si rompe silenziosamente anche
     /// se un chiamante futuro offrisse un progetto di un altro spazio (oggi i

@@ -25,14 +25,43 @@ final class SpeechCaptureService {
     }
 
     func start() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
-            Task { @MainActor in
-                guard status == .authorized else {
-                    self?.isAvailable = false
-                    return
-                }
-                self?.beginRecording()
+        guard !isRecording else { return }
+        SFSpeechRecognizer.requestAuthorization(Self.authorizationHandler { [weak self] authorized in
+            guard let self else { return }
+            guard authorized else {
+                self.isAvailable = false
+                return
             }
+            self.beginRecording()
+        })
+    }
+
+    // Le callback di Speech e AVAudioEngine arrivano su thread di sistema:
+    // costruite fuori dal MainActor (l'isolamento di default dell'app) non
+    // fanno scattare il controllo d'isolamento, e rientrano con un Task.
+
+    private nonisolated static func authorizationHandler(
+        _ onMain: @escaping @MainActor @Sendable (Bool) -> Void
+    ) -> @Sendable (SFSpeechRecognizerAuthorizationStatus) -> Void {
+        { status in
+            let authorized = status == .authorized
+            Task { @MainActor in onMain(authorized) }
+        }
+    }
+
+    private nonisolated static func tapBlock(
+        feeding request: SFSpeechAudioBufferRecognitionRequest
+    ) -> AVAudioNodeTapBlock {
+        { buffer, _ in request.append(buffer) }
+    }
+
+    private nonisolated static func resultHandler(
+        _ onMain: @escaping @MainActor @Sendable (String?, Bool) -> Void
+    ) -> @Sendable (SFSpeechRecognitionResult?, Error?) -> Void {
+        { result, error in
+            let text = result?.bestTranscription.formattedString
+            let finished = error != nil || (result?.isFinal ?? false)
+            Task { @MainActor in onMain(text, finished) }
         }
     }
 
@@ -72,21 +101,26 @@ final class SpeechCaptureService {
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            request.append(buffer)
+        // Mac senza microfono (mini, Studio) o permesso negato: formato a
+        // 0 Hz / 0 canali → installTap solleva un'eccezione e l'app crasha.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            self.request = nil
+            isAvailable = false
+            return
         }
+        // Un tap rimasto da una sessione precedente → eccezione al secondo.
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format,
+                             block: Self.tapBlock(feeding: request))
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            Task { @MainActor in
+        recognitionTask = recognizer.recognitionTask(
+            with: request,
+            resultHandler: Self.resultHandler { [weak self] text, finished in
                 guard let self else { return }
-                if let result {
-                    self.transcript = result.bestTranscription.formattedString
-                }
-                if error != nil || (result?.isFinal ?? false) {
-                    self.stop()
-                }
+                if let text { self.transcript = text }
+                if finished { self.stop() }
             }
-        }
+        )
 
         audioEngine.prepare()
         do {

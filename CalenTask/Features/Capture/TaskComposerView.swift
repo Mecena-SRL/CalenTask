@@ -301,7 +301,7 @@ struct TaskComposerView: View {
                 kind: kind,
                 priority: priority,
                 startAt: kind == .reminder ? nil : startAt,
-                endAt: kind == .reminder ? nil : endAt,
+                endAt: kind == .reminder ? nil : TodoTask.orderedEnd(endAt, start: startAt),
                 dueAt: kind == .event ? nil : dueAt,
                 remindAt: remindAt,
                 allDay: kind == .event && allDay,

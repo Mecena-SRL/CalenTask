@@ -834,6 +834,36 @@ struct DomainModelTests {
         #expect(stats.byDay[calendar.startOfDay(for: at(1))] == 2)
     }
 
+    /// Inizio e fine restano in ordine: una fine prima dell'inizio mandava
+    /// in crash l'agenda del giorno (range rovesciato).
+    @Test func startAndEndStayOrdered() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let task = TodoTask(workspaceID: workspace.id, title: "Riunione", kind: .event,
+                            startAt: start, endAt: start.addingTimeInterval(3600),
+                            createdByID: me.id)
+        context.insert(task)
+
+        // L'inizio oltre la fine si porta dietro la fine, stessa durata.
+        let later = start.addingTimeInterval(5 * 3600)
+        task.setStart(later)
+        #expect(task.startAt == later)
+        #expect(task.endAt == later.addingTimeInterval(3600))
+
+        // Una fine prima dell'inizio si ferma all'inizio.
+        task.setEnd(start)
+        #expect(task.endAt == later)
+
+        // Toglierle resta possibile.
+        task.setEnd(nil)
+        #expect(task.endAt == nil)
+        #expect(TodoTask.orderedEnd(start, start: later) == later)
+        #expect(TodoTask.orderedEnd(nil, start: later) == nil)
+        #expect(TodoTask.orderedEnd(later, start: nil) == later)
+    }
+
     /// Impostazioni: la ricerca trova pagine, funzioni e preferenze (senza
     /// badare a maiuscole e accenti); ogni funzione ha descrizione e icona e
     /// quelle generali non finiscono nella pagina del modulo.

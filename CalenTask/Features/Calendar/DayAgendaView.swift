@@ -209,7 +209,9 @@ struct DayAgendaView: View {
     private func isImminent(_ task: TodoTask) -> Bool {
         guard let startAt = task.startAt else { return false }
         let lead = startAt.addingTimeInterval(-10 * 60)
-        let end = task.endAt ?? startAt.addingTimeInterval(3600)
-        return (lead...end).contains(.now)
+        // Mai un range rovesciato (fine prima dell'inizio): crashava.
+        let end = max(task.endAt ?? startAt.addingTimeInterval(3600), startAt)
+        let now = Date.now
+        return lead <= now && now <= end
     }
 }

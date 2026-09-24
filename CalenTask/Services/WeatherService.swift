@@ -101,7 +101,8 @@ final class WeatherService: NSObject {
     }
 
     private func apply(days: [DayForecast]) {
-        byDay = Dictionary(uniqueKeysWithValues: days.map { ($0.day, $0) })
+        // Due giorni uguali (cambio d'ora, fuso) non devono crashare.
+        byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     // MARK: Cache
