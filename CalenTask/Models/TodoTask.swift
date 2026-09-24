@@ -38,6 +38,11 @@ final class TodoTask {
     var recurrenceInterval: Int = 0
     var recurrenceModeRaw: String?
     var recurrenceEndAt: Date?
+    /// #8 — Ancora della serie: la data (scadenza, o inizio) della prima
+    /// occorrenza. Tiene il giorno del mese: 31/01 → 28/02 → 31/03, non
+    /// 28/03. nil ⇒ la serie non ha ancora generato occorrenze.
+    /// CalenTaskSchemaV11.
+    var recurrenceAnchorAt: Date?
 
     /// Template tasks/phases are blueprints: excluded from every operational
     /// list, instantiated on demand (D13).

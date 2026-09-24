@@ -211,6 +211,47 @@ struct DomainModelTests {
         #expect(next.dueAt == expected)
     }
 
+    /// #8 — una mensile fissata al 31 non scivola: 31/01 → 28/02 → 31/03 →
+    /// 30/04 → 31/05 (prima: 28/03, 28/04…).
+    @Test func monthlyRecurrenceKeepsEndOfMonthAnchor() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        func date(_ month: Int, _ day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2027, month: month, day: day, hour: 9))!
+        }
+
+        var current = TodoTask(workspaceID: workspace.id, title: "Fattura fine mese",
+                               dueAt: date(1, 31), createdByID: me.id)
+        context.insert(current)
+        current.recurrenceFrequency = .monthly
+        current.recurrenceMode = .fixed
+
+        for expected in [date(2, 28), date(3, 31), date(4, 30), date(5, 31)] {
+            current.toggleDone()
+            let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
+            let next = try #require(open.first { $0.title == "Fattura fine mese" })
+            #expect(next.dueAt == expected)
+            #expect(next.recurrenceAnchorAt == date(1, 31))
+            current = next
+        }
+
+        // Spostata a mano a metà mese: resta lì, niente ritorno al 31.
+        #expect(TodoTask.restoringAnchorDay(
+            date(3, 15), previous: date(2, 15), anchor: date(1, 31),
+            frequency: .monthly, calendar: calendar
+        ) == date(3, 15))
+        // Annuale del 29/02: negli anni bisestili torna il 29.
+        let leap = calendar.date(from: DateComponents(year: 2028, month: 2, day: 29, hour: 9))!
+        let feb2031 = calendar.date(from: DateComponents(year: 2031, month: 2, day: 28, hour: 9))!
+        let feb2032 = calendar.date(from: DateComponents(year: 2032, month: 2, day: 28, hour: 9))!
+        let restored = TodoTask.restoringAnchorDay(
+            feb2032, previous: feb2031, anchor: leap, frequency: .yearly, calendar: calendar
+        )
+        #expect(calendar.component(.day, from: restored) == 29)
+    }
+
     @Test func recurrenceStopsAfterEndDate() throws {
         let container = try makeContainer()
         let context = container.mainContext

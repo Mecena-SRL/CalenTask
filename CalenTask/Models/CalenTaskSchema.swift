@@ -159,3 +159,14 @@ enum CalenTaskSchemaV10: VersionedSchema {
         CalenTaskSchemaV2.models
     }
 }
+
+/// V11 (#8, 2026-09-24): aggiunge `TodoTask.recurrenceAnchorAt`, l'ancora
+/// della serie ricorrente (le mensili non scivolano più a fine mese). Solo
+/// una proprietà opzionale nuova.
+enum CalenTaskSchemaV11: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(11, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        CalenTaskSchemaV2.models
+    }
+}
