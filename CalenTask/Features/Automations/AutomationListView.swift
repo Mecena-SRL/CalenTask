@@ -129,7 +129,7 @@ struct AutomationListView: View {
             }
         }
         if let assignee = rule.assignToID { actions.append("riassegna a \(name(of: assignee))") }
-        if let notify = rule.notifyUserID { actions.append("notifica \(name(of: notify))") }
+        if let notify = rule.notifyUserID { actions.append("avviso su questo dispositivo (per \(name(of: notify)))") }
         return when + " → " + (actions.isEmpty ? "nessuna azione" : actions.joined(separator: ", "))
     }
 
@@ -243,7 +243,9 @@ private struct AutomationRuleEditor: View {
                         set: { rule.assignToID = $0; rule.updatedAt = .now }
                     ))
 
-                    personPicker("Notifica", selection: Binding(
+                    // #29 — onesto: senza collaborazione reale (#23) l'avviso compare
+                    // sul dispositivo di chi fa scattare la regola, non del destinatario.
+                    personPicker("Avviso qui (per)", selection: Binding(
                         get: { rule.notifyUserID },
                         set: { rule.notifyUserID = $0; rule.updatedAt = .now }
                     ))

@@ -91,8 +91,7 @@ final class CalendarSyncService {
             // Recurring events surface once per occurrence; track the series once.
             guard seenIdentifiers.insert(identifier).inserted else { continue }
 
-            let existing = try fetchTask(eventIdentifier: identifier, in: context)
-            if let task = existing {
+            if let task = try linkedTask(for: identifier, event: event, in: context) {
                 guard task.deletedAt == nil else { continue }
                 let remoteStamp = event.lastModifiedDate ?? .distantPast
                 if remoteStamp > task.updatedAt {
@@ -107,22 +106,78 @@ final class CalendarSyncService {
                 )
                 context.insert(task)
                 apply(event, to: task)
+                links.link(event: identifier, to: task.id)
             }
         }
 
         // Events deleted in the system calendar disappear locally too —
-        // but only inside the sync window, and only for already-linked tasks.
-        let linked = try fetchLinkedEventTasks(in: context)
-        for task in linked where task.deletedAt == nil {
-            guard let identifier = task.eventIdentifier,
+        // but only inside the sync window, and only for tasks linked ON THIS
+        // device (#1): an id imported elsewhere doesn't exist here and does
+        // NOT mean "deleted".
+        for (identifier, taskID) in links.links where !seenIdentifiers.contains(identifier) {
+            guard store.event(withIdentifier: identifier) == nil else { continue }
+            guard let task = try fetchTask(id: taskID, in: context) else {
+                links.unlink(event: identifier)
+                continue
+            }
+            guard task.deletedAt == nil,
                   let start = task.startAt,
-                  start >= window.start, start <= window.end,
-                  !seenIdentifiers.contains(identifier),
-                  store.event(withIdentifier: identifier) == nil
+                  start >= window.start, start <= window.end
             else { continue }
-            task.deletedAt = .now
-            task.updatedAt = .now
+            task.softDelete()   // funnel: cancels its notifications too
+            links.unlink(event: identifier)
         }
+    }
+
+    /// The task for a LOCAL event: 1) this device's registry; 2) a task
+    /// created here before the registry existed; 3) the same meeting already
+    /// imported by another device (same title and times, not linked here) —
+    /// adopted instead of duplicated (#1).
+    private func linkedTask(
+        for identifier: String, event: EKEvent, in context: ModelContext
+    ) throws -> TodoTask? {
+        if let taskID = links.taskID(forEvent: identifier) {
+            if let task = try fetchTask(id: taskID, in: context) { return task }
+            links.unlink(event: identifier)
+        }
+        if let task = try fetchTask(eventIdentifier: identifier, in: context) {
+            links.link(event: identifier, to: task.id)
+            return task
+        }
+        if let task = try adoptableTask(for: event, in: context) {
+            links.link(event: identifier, to: task.id)
+            return task
+        }
+        return nil
+    }
+
+    private func adoptableTask(for event: EKEvent, in context: ModelContext) throws -> TodoTask? {
+        let start: Date? = event.startDate
+        guard start != nil else { return nil }
+        let end: Date? = event.endDate
+        let title = event.title ?? "Evento"
+        let eventRaw = TaskKind.event.rawValue
+        let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate {
+            $0.kindRaw == eventRaw && $0.deletedAt == nil && $0.eventIdentifier != nil
+                && $0.title == title && $0.startAt == start
+        })
+        return try context.fetch(descriptor).first { task in
+            task.endAt == end && !links.isLinkedHere(task.id)
+        }
+    }
+
+    /// This device's EKEvent for a task, if any.
+    private func localEvent(for task: TodoTask) -> EKEvent? {
+        if let identifier = links.eventIdentifier(forTask: task.id),
+           let event = store.event(withIdentifier: identifier) {
+            return event
+        }
+        if let identifier = task.eventIdentifier,
+           let event = store.event(withIdentifier: identifier) {
+            links.link(event: identifier, to: task.id)
+            return event
+        }
+        return nil
     }
 
     private func apply(_ event: EKEvent, to task: TodoTask) {
@@ -136,8 +191,12 @@ final class CalendarSyncService {
         task.timeZoneID = event.timeZone?.identifier
         task.attendees = (event.attendees ?? []).compactMap(\.name)
         task.alertOffsetsMinutes = (event.alarms ?? []).map { Int(-$0.relativeOffset / 60) }
-        task.eventIdentifier = event.eventIdentifier
-        task.calendarIdentifier = event.calendar?.calendarIdentifier
+        // #1 — device-local ids: set once (new task), never overwritten by
+        // another device's import.
+        if task.eventIdentifier == nil { task.eventIdentifier = event.eventIdentifier }
+        if task.calendarIdentifier == nil {
+            task.calendarIdentifier = event.calendar?.calendarIdentifier
+        }
         if let rule = event.recurrenceRules?.first {
             task.recurrenceFrequency = RecurrenceFrequency(ekFrequency: rule.frequency)
             task.recurrenceInterval = rule.interval
@@ -191,12 +250,19 @@ final class CalendarSyncService {
     @ObservationIgnored
     private var pendingPushes: [UUID: Task<Void, Never>] = [:]
 
+    /// #1 — this device's own event ↔ task links (never synced).
+    @ObservationIgnored
+    private var links = EventLinkRegistry()
+
     private func push(_ task: TodoTask) throws {
         guard let startAt = task.startAt else { return }
         let event: EKEvent
-        if let identifier = task.eventIdentifier,
-           let existing = store.event(withIdentifier: identifier) {
+        if let existing = localEvent(for: task) {
             event = existing
+        } else if task.eventIdentifier != nil, !links.isLinkedHere(task.id) {
+            // #1 — linked to ANOTHER device's event that isn't here (yet):
+            // creating a new one would duplicate it in the system calendar.
+            return
         } else {
             event = EKEvent(eventStore: store)
             event.calendar = task.calendarIdentifier
@@ -229,19 +295,24 @@ final class CalendarSyncService {
         }
 
         try store.save(event, span: .futureEvents)
-        if task.eventIdentifier != event.eventIdentifier {
+        if let identifier = event.eventIdentifier {
+            links.link(event: identifier, to: task.id)
+        }
+        // Synced fields only mark "linked somewhere": written once, never
+        // overwritten with this device's ids (no ping-pong between devices).
+        if task.eventIdentifier == nil {
             task.eventIdentifier = event.eventIdentifier
         }
-        if task.calendarIdentifier != event.calendar?.calendarIdentifier {
+        if task.calendarIdentifier == nil {
             task.calendarIdentifier = event.calendar?.calendarIdentifier
         }
     }
 
     private func removeRemoteEvent(for task: TodoTask) {
-        guard let identifier = task.eventIdentifier,
-              let event = store.event(withIdentifier: identifier)
-        else { return }
+        guard let event = localEvent(for: task) else { return }
+        let identifier = event.eventIdentifier
         try? store.remove(event, span: .futureEvents)
+        if let identifier { links.unlink(event: identifier) }
     }
 
     // MARK: Fetch helpers
@@ -254,12 +325,10 @@ final class CalendarSyncService {
         return try context.fetch(descriptor).first
     }
 
-    private func fetchLinkedEventTasks(in context: ModelContext) throws -> [TodoTask] {
-        let eventRaw = TaskKind.event.rawValue
-        let descriptor = FetchDescriptor<TodoTask>(
-            predicate: #Predicate { $0.kindRaw == eventRaw && $0.eventIdentifier != nil }
-        )
-        return try context.fetch(descriptor)
+    private func fetchTask(id: UUID, in context: ModelContext) throws -> TodoTask? {
+        var descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 }
 

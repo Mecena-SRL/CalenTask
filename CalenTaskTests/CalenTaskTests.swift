@@ -660,6 +660,29 @@ struct DomainModelTests {
         #expect(NotificationService.plannedSchedule(for: task, now: now).isEmpty)
     }
 
+    /// #1 — i collegamenti evento↔task sono per dispositivo, persistono e
+    /// una task ha al massimo un evento locale.
+    @Test func eventLinkRegistryPersistsPerDeviceLinks() throws {
+        let suite = "EventLinkRegistryTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let task = UUID()
+        var registry = EventLinkRegistry(defaults: defaults)
+        #expect(!registry.isLinkedHere(task))
+        registry.link(event: "EV-1", to: task)
+        registry.link(event: "EV-2", to: task)   // sostituisce EV-1
+
+        let reloaded = EventLinkRegistry(defaults: defaults)
+        #expect(reloaded.taskID(forEvent: "EV-2") == task)
+        #expect(reloaded.taskID(forEvent: "EV-1") == nil)
+        #expect(reloaded.eventIdentifier(forTask: task) == "EV-2")
+        #expect(reloaded.isLinkedHere(task))
+
+        registry.unlink(event: "EV-2")
+        #expect(EventLinkRegistry(defaults: defaults).links.isEmpty)
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext

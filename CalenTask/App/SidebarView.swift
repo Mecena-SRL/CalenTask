@@ -78,6 +78,7 @@ struct SidebarView: View {
     }
 
     var body: some View {
+        let openCounts = openCountByProject
         List(selection: selection) {
             Section {
                 ForEach(configuration.navigationSections) { section in
@@ -98,7 +99,7 @@ struct SidebarView: View {
             if configuration.isEnabled(.projects) && !favoriteProjects.isEmpty {
                 Section(isExpanded: $showsFavorites) {
                     ForEach(favoriteProjects, id: \.id) { project in
-                        sidebarProjectRow(project)
+                        sidebarProjectRow(project, openCount: openCounts[project.id] ?? 0)
                             .tag(AppDestination.project(project.id))
                     }
                 } header: {
@@ -109,7 +110,7 @@ struct SidebarView: View {
             if configuration.isEnabled(.projects) {
             Section(isExpanded: $showsProjects) {
                 ForEach(otherProjects, id: \.id) { project in
-                    sidebarProjectRow(project)
+                    sidebarProjectRow(project, openCount: openCounts[project.id] ?? 0)
                         .tag(AppDestination.project(project.id))
                 }
             } header: {
@@ -195,9 +196,19 @@ struct SidebarView: View {
 
     // MARK: Righe
 
-    private func sidebarProjectRow(_ project: Project) -> some View {
-        let open = project.tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isPhase && !$0.isTemplate }.count
-        return HStack(spacing: DS.s) {
+    /// #11 — un solo passaggio sulle attività aperte (già caricate) invece di
+    /// caricare, per ogni progetto e a ogni render, TUTTE le sue attività
+    /// (completate e cancellate incluse).
+    private var openCountByProject: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for task in allOpenTasks {
+            if let id = task.project?.id { counts[id, default: 0] += 1 }
+        }
+        return counts
+    }
+
+    private func sidebarProjectRow(_ project: Project, openCount open: Int) -> some View {
+        HStack(spacing: DS.s) {
             Circle()
                 .fill(Color(hex: project.colorHex).gradient)
                 .frame(width: 10, height: 10)

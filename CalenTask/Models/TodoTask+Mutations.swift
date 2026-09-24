@@ -133,7 +133,7 @@ extension TodoTask {
             startAt: plannedStart,
             endAt: shiftedEnd(nextStart: nextStart),
             dueAt: plannedDue,
-            remindAt: shiftedRemind(calendar: calendar),
+            remindAt: shiftedRemind(nextDue: nextDue, nextStart: nextStart, calendar: calendar),
             allDay: allDay,
             timeZoneID: timeZoneID,
             locationName: locationName,
@@ -184,8 +184,14 @@ extension TodoTask {
     }
 
     /// Preserves the reminder's offset relative to its anchor date.
-    private func shiftedRemind(calendar: Calendar) -> Date? {
+    private func shiftedRemind(nextDue: Date?, nextStart: Date?, calendar: Calendar) -> Date? {
         guard let remindAt, let frequency = recurrenceFrequency else { return nil }
+        // #8 — stesso anticipo rispetto alla data di riferimento: vale anche
+        // per "dopo il completamento", che riparte da oggi (prima il
+        // promemoria avanzava dalla vecchia data e poteva finire nel passato).
+        if let anchor = dueAt ?? startAt, let nextAnchor = dueAt != nil ? nextDue : nextStart {
+            return nextAnchor.addingTimeInterval(remindAt.timeIntervalSince(anchor))
+        }
         return calendar.date(
             byAdding: frequency.calendarComponent, value: max(1, recurrenceInterval), to: remindAt
         )
