@@ -577,12 +577,19 @@ struct DomainModelTests {
 
         task.toggleDone()     // completa → genera la prossima
         task.toggleDone()     // riapre → NON deve generarne un'altra
-        task.toggleDone()     // ricompleta → ne genera una sola in più
+        task.toggleDone()     // ricompleta → la prossima esiste già: nessun doppione (#8)
         try context.save()
 
         let clones = try context.fetch(FetchDescriptor<TodoTask>())
             .filter { $0.title == "Report mensile" }
-        #expect(clones.count == 3)   // originale + 2 spawn (uno per completamento)
+        #expect(clones.count == 2)   // originale + UNA sola occorrenza successiva
+
+        // Completare dal menu Stato (setStatus) genera la successiva come il checkbox.
+        let next = try #require(clones.first { $0.id != task.id })
+        next.setStatus(.done)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<TodoTask>())
+            .filter { $0.title == "Report mensile" }.count == 3)
     }
 
     @Test func dueFireDateMovesMidnightToNineKeepsExplicitTimes() {
