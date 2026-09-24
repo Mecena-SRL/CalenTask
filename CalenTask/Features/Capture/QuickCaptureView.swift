@@ -152,7 +152,7 @@ struct QuickCaptureView: View {
             suppressPriority = false
             isTitleFocused = true
         } catch {
-            assertionFailure("Quick capture failed: \(error)")
+            reportFailure("Quick capture failed: \(error)")
         }
     }
 }

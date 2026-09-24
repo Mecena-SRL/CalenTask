@@ -112,7 +112,7 @@ struct IntakeFormView: View {
             NotificationService.shared.sync(task: task)
             dismiss()
         } catch {
-            assertionFailure("Intake failed: \(error)")
+            reportFailure("Intake failed: \(error)")
         }
     }
 }

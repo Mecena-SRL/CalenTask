@@ -33,7 +33,7 @@ enum AutomationEngine {
                 predicate: #Predicate { $0.deletedAt == nil && $0.isEnabled }
             ))
         } catch {
-            assertionFailure("Automation fetch failed: \(error)")
+            reportFailure("Automation fetch failed: \(error)")
             return
         }
         for rule in rules where rule.projectID == projectID && matching(rule) {

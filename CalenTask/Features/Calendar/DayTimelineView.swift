@@ -184,7 +184,7 @@ struct DayTimelineView: View {
             router.open(taskID: task.id)
             #endif
         } catch {
-            assertionFailure("create timed task: \(error)")
+            reportFailure("create timed task: \(error)")
         }
     }
 

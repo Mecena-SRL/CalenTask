@@ -34,6 +34,10 @@ struct AccountSection: View {
         if isICloudActive {
             return "I dati seguono il tuo Apple ID su Mac e iPhone"
         }
+        // #17 — prima questo caso cadeva in silenzio sullo store locale.
+        if let failure = StoreMode.cloudKitFailure {
+            return "iCloud non si è aperto (\(failure)): i dati restano solo su questo dispositivo"
+        }
         if hasSystemICloudAccount {
             return "Apple ID collegato, ma questa build usa lo store locale (simulatore o firma senza iCloud)"
         }
