@@ -17,10 +17,16 @@ struct AppConfiguration: Codable, Equatable {
 
     static let standard = AppConfiguration()
 
+    /// #12 — 13 viste decodificano la configurazione a ogni `body`: il JSON
+    /// si rilegge solo quando la stringa salvata cambia davvero.
+    private static var decodeCache: (raw: String, value: AppConfiguration)?
+
     static func decode(_ raw: String) -> Self {
+        if let cached = decodeCache, cached.raw == raw { return cached.value }
         guard let data = raw.data(using: .utf8),
               let value = try? JSONDecoder().decode(Self.self, from: data)
         else { return .standard }
+        decodeCache = (raw, value)
         return value
     }
 
