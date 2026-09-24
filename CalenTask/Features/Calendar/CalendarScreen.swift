@@ -1055,11 +1055,9 @@ struct CalendarScreen: View {
         // caricata segue il giorno selezionato, non oggi.
         let start = calendar.startOfDay(for: .now)
         let end = calendar.date(byAdding: .day, value: 8, to: start) ?? start
-        let upcoming = (try? modelContext.fetch(FetchDescriptor(
-            predicate: TodoTask.calendarStartPredicate(
-                from: start, to: end, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw)
-            )
-        ))) ?? []
+        let upcoming = (try? TodoTask.fetchCalendarWindow(
+            from: start, to: end, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), in: modelContext
+        )) ?? []
         slotProposals = Self.freeSlots(
             duration: duration, in: visible(upcoming), calendar: calendar
         )
@@ -1322,32 +1320,38 @@ struct CalendarScreen: View {
 /// scelto, filtrate nello store (prima: tutte le task di sempre, filtrate in
 /// memoria). Consegna i risultati quando cambiano davvero.
 private struct CalendarWindowQuery: View {
-    @Query private var started: [TodoTask]
+    // Una query per predicato di `TodoTask.calendarWindowPredicates`.
+    @Query private var starting: [TodoTask]
+    @Query private var ongoing: [TodoTask]
     @Query private var due: [TodoTask]
+    @Query private var spanning: [TodoTask]
     @Query private var unscheduled: [TodoTask]
     let onChange: ([TodoTask]) -> Void
 
     init(window: DateInterval, workspaceID: UUID?, onChange: @escaping ([TodoTask]) -> Void) {
-        _started = Query(filter: TodoTask.calendarStartPredicate(
+        let predicates = TodoTask.calendarWindowPredicates(
             from: window.start, to: window.end, workspaceID: workspaceID
-        ))
-        _due = Query(filter: TodoTask.calendarDuePredicate(
-            from: window.start, to: window.end, workspaceID: workspaceID
-        ))
-        _unscheduled = Query(filter: TodoTask.unscheduledPredicate(workspaceID: workspaceID))
+        )
+        _starting = Query(filter: predicates[0])
+        _ongoing = Query(filter: predicates[1])
+        _due = Query(filter: predicates[2])
+        _spanning = Query(filter: predicates[3])
+        _unscheduled = Query(filter: predicates[4])
         self.onChange = onChange
     }
+
+    private var groups: [[TodoTask]] { [starting, ongoing, due, spanning, unscheduled] }
 
     var body: some View {
         Color.clear
             .onChange(of: resultsKey, initial: true) { _, _ in
-                onChange(TodoTask.mergingUnique(started, due, unscheduled))
+                onChange(TodoTask.mergingUnique(groups))
             }
     }
 
     /// Cambia a ogni `touch()` (updatedAt), inserimento o cancellazione.
     private var resultsKey: [Int] {
-        [started, due, unscheduled].map { group in
+        groups.map { group in
             group.reduce(group.count) {
                 $0 &+ $1.id.hashValue &+ Int($1.updatedAt.timeIntervalSinceReferenceDate * 1000)
             }

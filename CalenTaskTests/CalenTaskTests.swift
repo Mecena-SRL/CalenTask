@@ -779,16 +779,9 @@ struct DomainModelTests {
         #expect(!window.contains(day(2027, 3, 1)))
 
         func titles(_ workspaceID: UUID?) throws -> Set<String> {
-            let started = try context.fetch(FetchDescriptor(predicate: TodoTask.calendarStartPredicate(
-                from: window.start, to: window.end, workspaceID: workspaceID
-            )))
-            let due = try context.fetch(FetchDescriptor(predicate: TodoTask.calendarDuePredicate(
-                from: window.start, to: window.end, workspaceID: workspaceID
-            )))
-            let unscheduled = try context.fetch(FetchDescriptor(
-                predicate: TodoTask.unscheduledPredicate(workspaceID: workspaceID)
-            ))
-            return Set(TodoTask.mergingUnique(started, due, unscheduled).map(\.title))
+            Set(try TodoTask.fetchCalendarWindow(
+                from: window.start, to: window.end, workspaceID: workspaceID, in: context
+            ).map(\.title))
         }
         #expect(try titles(workspace.id) == ["Riunione", "Trasferta", "Fase", "Scadenza", "Da pianificare"])
         #expect(try titles(nil).contains("Altro spazio"))
