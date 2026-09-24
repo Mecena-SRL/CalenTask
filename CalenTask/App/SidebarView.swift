@@ -94,109 +94,127 @@ private struct SidebarContent: View {
         let favoriteProjects = scopedProjects.filter(\.isFavorite)
         let otherProjects = scopedProjects.filter { !$0.isFavorite }
 
-        List(selection: selection) {
-            Section {
-                ForEach(configuration.navigationSections) { section in
-                    SidebarNavRow(
-                        section: section,
-                        count: badgeCount(for: section, stats: stats)
-                    )
-                    .tag(AppDestination.section(section))
-                }
-            }
+        // Testata e piè di pagina FUORI dalla List, in una VStack (crash
+        // 0.0.3/0.0.4 all'avvio): con `.safeAreaInset` sulla List della
+        // sidebar, AppKit spostava le righe ospitate a ogni passaggio di
+        // layout, ne invalidava la safe area e rifaceva i vincoli all'infinito
+        // ("more Update Constraints in Window passes than there are views").
+        VStack(spacing: 0) {
+            sidebarHeader(openCount: stats.total)
 
-            // D75 — i preferiti sempre sott'occhio, sopra il resto.
-            if configuration.isEnabled(.projects) && !favoriteProjects.isEmpty {
+            List(selection: selection) {
                 Section {
-                    if showsFavorites {
-                        ForEach(favoriteProjects, id: \.id) { project in
-                            projectRow(project, openCount: openCounts[project.id] ?? 0)
-                                .tag(AppDestination.project(project.id))
-                        }
+                    ForEach(configuration.navigationSections) { section in
+                        SidebarNavRow(
+                            section: section,
+                            count: badgeCount(for: section, stats: stats)
+                        )
+                        .tag(AppDestination.section(section))
                     }
-                } header: {
-                    SidebarGroupHeader(
-                        title: "Preferiti",
-                        count: favoriteProjects.count,
-                        isExpanded: $showsFavorites
-                    )
                 }
-            }
 
-            if configuration.isEnabled(.projects) {
-                Section {
-                    if showsProjects {
-                        ForEach(otherProjects, id: \.id) { project in
-                            projectRow(project, openCount: openCounts[project.id] ?? 0)
-                                .tag(AppDestination.project(project.id))
+                // D75 — i preferiti sempre sott'occhio, sopra il resto.
+                if configuration.isEnabled(.projects) && !favoriteProjects.isEmpty {
+                    Section {
+                        if showsFavorites {
+                            ForEach(favoriteProjects, id: \.id) { project in
+                                projectRow(project, openCount: openCounts[project.id] ?? 0)
+                                    .tag(AppDestination.project(project.id))
+                            }
                         }
-                        if scopedProjects.isEmpty {
-                            SidebarPlaceholderRow(
-                                title: "Crea il primo progetto",
-                                systemImage: "plus.circle"
-                            ) { isCreatingProject = true }
-                        }
+                    } header: {
+                        SidebarGroupHeader(
+                            title: "Preferiti",
+                            count: favoriteProjects.count,
+                            isExpanded: $showsFavorites
+                        )
                     }
-                } header: {
-                    SidebarGroupHeader(
-                        title: "Progetti",
-                        count: otherProjects.count,
-                        isExpanded: $showsProjects,
-                        accessory: SidebarGroupHeader.Accessory(systemImage: "plus", help: "Nuovo progetto") {
-                            isCreatingProject = true
-                        }
-                    )
                 }
-            }
 
-            if configuration.isEnabled(.smartLists) {
-                Section {
-                    if showsLists {
-                        ForEach(smartLists, id: \.id) { list in
-                            smartListRow(list)
-                                .tag(AppDestination.smartList(list.id))
+                if configuration.isEnabled(.projects) {
+                    Section {
+                        if showsProjects {
+                            ForEach(otherProjects, id: \.id) { project in
+                                projectRow(project, openCount: openCounts[project.id] ?? 0)
+                                    .tag(AppDestination.project(project.id))
+                            }
+                            if scopedProjects.isEmpty {
+                                SidebarPlaceholderRow(
+                                    title: "Crea il primo progetto",
+                                    systemImage: "plus.circle"
+                                ) { isCreatingProject = true }
+                            }
                         }
-                        if smartLists.isEmpty {
-                            SidebarPlaceholderRow(
-                                title: "Nuova lista smart",
-                                systemImage: "plus.circle"
-                            ) { isCreatingSmartList = true }
-                        }
+                    } header: {
+                        SidebarGroupHeader(
+                            title: "Progetti",
+                            count: otherProjects.count,
+                            isExpanded: $showsProjects,
+                            accessory: SidebarGroupHeader.Accessory(systemImage: "plus", help: "Nuovo progetto") {
+                                isCreatingProject = true
+                            }
+                        )
                     }
-                } header: {
-                    SidebarGroupHeader(
-                        title: "Liste",
-                        count: smartLists.count,
-                        isExpanded: $showsLists,
-                        accessory: SidebarGroupHeader.Accessory(systemImage: "plus", help: "Nuova lista") {
-                            isCreatingSmartList = true
-                        }
-                    )
                 }
-            }
 
-            // F3 — Etichette alla pari di Progetti e Liste.
-            if configuration.isEnabled(.tags) && !tags.isEmpty {
-                Section {
-                    if showsTags {
-                        ForEach(tags, id: \.id) { tag in
-                            tagRow(tag)
-                                .tag(AppDestination.tag(tag.id))
+                if configuration.isEnabled(.smartLists) {
+                    Section {
+                        if showsLists {
+                            ForEach(smartLists, id: \.id) { list in
+                                smartListRow(list)
+                                    .tag(AppDestination.smartList(list.id))
+                            }
+                            if smartLists.isEmpty {
+                                SidebarPlaceholderRow(
+                                    title: "Nuova lista smart",
+                                    systemImage: "plus.circle"
+                                ) { isCreatingSmartList = true }
+                            }
                         }
+                    } header: {
+                        SidebarGroupHeader(
+                            title: "Liste",
+                            count: smartLists.count,
+                            isExpanded: $showsLists,
+                            accessory: SidebarGroupHeader.Accessory(systemImage: "plus", help: "Nuova lista") {
+                                isCreatingSmartList = true
+                            }
+                        )
                     }
-                } header: {
-                    SidebarGroupHeader(
-                        title: "Etichette",
-                        count: tags.count,
-                        isExpanded: $showsTags,
-                        accessory: SidebarGroupHeader.Accessory(systemImage: "slider.horizontal.3", help: "Gestisci etichette") {
-                            showsTagManager = true
+                }
+
+                // F3 — Etichette alla pari di Progetti e Liste.
+                if configuration.isEnabled(.tags) && !tags.isEmpty {
+                    Section {
+                        if showsTags {
+                            ForEach(tags, id: \.id) { tag in
+                                tagRow(tag)
+                                    .tag(AppDestination.tag(tag.id))
+                            }
                         }
-                    )
+                    } header: {
+                        SidebarGroupHeader(
+                            title: "Etichette",
+                            count: tags.count,
+                            isExpanded: $showsTags,
+                            accessory: SidebarGroupHeader.Accessory(systemImage: "slider.horizontal.3", help: "Gestisci etichette") {
+                                showsTagManager = true
+                            }
+                        )
+                    }
                 }
             }
+            .listStyle(.sidebar)
+
+            VStack(spacing: DS.s) {
+                if configuration.isEnabled(.sidebarMiniCalendar) {
+                    sidebarMiniMonth(counts: stats.byDay)
+                }
+                sidebarAccountFooter
+            }
+            .padding(DS.s)
+            .overlay(alignment: .top) { Divider() }
         }
-        .listStyle(.sidebar)
         .sheet(isPresented: $isCreatingSmartList) {
             SmartListEditorView()
         }
@@ -209,20 +227,6 @@ private struct SidebarContent: View {
         // Un nuovo preferito non resta nascosto in un gruppo chiuso.
         .onChange(of: favoriteProjects.count) { old, new in
             if new > old { showsFavorites = true }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            sidebarHeader(openCount: stats.total)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: DS.s) {
-                if configuration.isEnabled(.sidebarMiniCalendar) {
-                    sidebarMiniMonth(counts: stats.byDay)
-                }
-                sidebarAccountFooter
-            }
-            .padding(DS.s)
-            .background(.ultraThinMaterial)
-            .overlay(alignment: .top) { Divider() }
         }
         #if os(macOS)
         // Tema "misto": sidebar scura, contenuto secondo sistema (D47).
