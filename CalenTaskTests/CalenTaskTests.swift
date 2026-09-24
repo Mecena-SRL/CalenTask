@@ -890,6 +890,40 @@ struct DomainModelTests {
         #expect(!unmeasured.resolved(for: TaskPanel.inspectorMinWidth - 1).fitsTaskInspector)
     }
 
+    /// Aggiornamenti: confronto numerico delle versioni e scelta della
+    /// release (niente bozze, pre-release solo se richieste, serve un DMG).
+    @Test func updateMathPicksLatestRelease() throws {
+        #expect(UpdateMath.isNewer("v0.1.10", than: "0.1.9"))
+        #expect(UpdateMath.isNewer("0.1", than: "0.0.5"))
+        #expect(!UpdateMath.isNewer("v0.1.0", than: "0.1"))
+        #expect(!UpdateMath.isNewer("0.0.9", than: "0.1.0"))
+
+        func release(_ tag: String, prerelease: Bool = false, draft: Bool = false, dmg: Bool = true) -> String {
+            let assets = dmg
+                ? #"[{"name":"CalenTask-\#(tag).dmg","size":1,"url":"https://api.github.com/a/1","browser_download_url":"https://github.com/d/1"}]"#
+                : "[]"
+            return #"{"tag_name":"\#(tag)","name":null,"body":"note","draft":\#(draft),"prerelease":\#(prerelease),"html_url":"https://github.com/r/\#(tag)","assets":\#(assets)}"#
+        }
+        let json = "[" + [
+            release("v0.2.0", draft: true),
+            release("v0.1.2", prerelease: true),
+            release("v0.1.1"),
+            release("v0.1.3", dmg: false),
+            release("v0.0.9"),
+        ].joined(separator: ",") + "]"
+        let releases = try JSONDecoder().decode([GitHubRelease].self, from: Data(json.utf8))
+
+        let stable = UpdateMath.latestUpdate(in: releases, includePrereleases: false, currentVersion: "0.1.0")
+        #expect(stable?.version == "0.1.1")
+        #expect(stable?.asset.name == "CalenTask-v0.1.1.dmg")
+
+        let beta = UpdateMath.latestUpdate(in: releases, includePrereleases: true, currentVersion: "0.1.0")
+        #expect(beta?.version == "0.1.2")
+        #expect(beta?.isPrerelease == true)
+
+        #expect(UpdateMath.latestUpdate(in: releases, includePrereleases: true, currentVersion: "0.1.2") == nil)
+    }
+
     /// Impostazioni: la ricerca trova pagine, funzioni e preferenze (senza
     /// badare a maiuscole e accenti); ogni funzione ha descrizione e icona e
     /// quelle generali non finiscono nella pagina del modulo.

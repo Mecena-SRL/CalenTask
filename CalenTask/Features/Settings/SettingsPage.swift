@@ -11,12 +11,12 @@ import Observation
 /// Nuovo modulo: `case` in `AppModule` (+ le sue `AppFeature`) e le sue
 /// opzioni in `ModuleOptions.swift`. Nient'altro da toccare qui.
 enum SettingsPage: Hashable, Identifiable {
-    case general, appearance, notifications, sync, account
+    case general, appearance, notifications, sync, developer, account
     case modules
     case module(AppModule)
 
     /// Le pagine generali nella barra laterale (l'account ha la sua testata).
-    static let generalPages: [SettingsPage] = [.general, .appearance, .notifications, .sync]
+    static let generalPages: [SettingsPage] = [.general, .appearance, .notifications, .sync, .developer]
 
     var id: String {
         switch self {
@@ -24,6 +24,7 @@ enum SettingsPage: Hashable, Identifiable {
         case .appearance: "appearance"
         case .notifications: "notifications"
         case .sync: "sync"
+        case .developer: "developer"
         case .account: "account"
         case .modules: "modules"
         case .module(let module): "module.\(module.rawValue)"
@@ -36,6 +37,7 @@ enum SettingsPage: Hashable, Identifiable {
         case .appearance: "Aspetto"
         case .notifications: "Notifiche"
         case .sync: "Sincronizzazione"
+        case .developer: "Sviluppatore"
         case .account: "Account e spazi"
         case .modules: "Panoramica moduli"
         case .module(let module): module.title
@@ -48,6 +50,7 @@ enum SettingsPage: Hashable, Identifiable {
         case .appearance: "Tema e contenuto della barra laterale."
         case .notifications: "Permesso di sistema e riepilogo del mattino."
         case .sync: "iCloud tra i tuoi dispositivi e calendari di sistema."
+        case .developer: "Aggiornamenti da GitHub, pre-release e diagnostica."
         case .account: "Il tuo profilo e gli spazi di lavoro."
         case .modules: "Accendi solo ciò che ti serve: spegnere un modulo nasconde i suoi strumenti ma conserva dati e preferenze."
         case .module(let module): module.detail
@@ -60,6 +63,7 @@ enum SettingsPage: Hashable, Identifiable {
         case .appearance: "paintbrush"
         case .notifications: "bell.badge"
         case .sync: "arrow.triangle.2.circlepath.icloud"
+        case .developer: "hammer"
         case .account: "person.crop.circle"
         case .modules: "square.grid.2x2"
         case .module(let module): module.icon
@@ -72,6 +76,7 @@ enum SettingsPage: Hashable, Identifiable {
         case .appearance: Color(hex: "#5B5BD6")
         case .notifications: Color(hex: "#E54666")
         case .sync: Color(hex: "#0091FF")
+        case .developer: Color(hex: "#F76B15")
         case .account: Color(hex: "#30A46C")
         case .modules: Color(hex: "#8E4EC6")
         case .module(let module): module.tint
@@ -137,6 +142,11 @@ enum SettingsSearch {
             .init(title: "iCloud", page: .sync, keywords: ["cloud", "dispositivi", "mac", "iphone", "backup"]),
             .init(title: "Calendari di sistema", page: .sync,
                   keywords: ["apple", "google", "exchange", "eventkit", "eventi"]),
+            .init(title: "Aggiornamenti", page: .developer,
+                  keywords: ["update", "versione", "github", "scarica", "installa"]),
+            .init(title: "Pre-release", page: .developer, keywords: ["beta", "prova", "test"]),
+            .init(title: "Token GitHub", page: .developer, keywords: ["token", "accesso", "portachiavi"]),
+            .init(title: "Diagnostica", page: .developer, keywords: ["debug", "errore", "crash", "log"]),
             .init(title: "Profilo", page: .account, keywords: ["nome", "email", "utente"]),
             .init(title: "Spazi di lavoro", page: .account, keywords: ["workspace", "spazi", "azienda"]),
             .init(title: "Ordine dei moduli", page: .modules, keywords: ["riordina", "ordine"]),
