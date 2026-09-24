@@ -37,6 +37,8 @@ struct CalendarScreen: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @State private var selectedDay = Date.now.startOfDay
+    /// Vista Anno: larghezza della griglia dei mesi → numero di colonne.
+    @State private var yearGridWidth: CGFloat = 0
     @State private var showsCapture = false
     @State private var calendarSync = CalendarSyncService.shared
     @State private var isSyncing = false
@@ -936,13 +938,24 @@ struct CalendarScreen: View {
                 // F27 — l'anno racconta i numeri prima dei quadri.
                 if showsSummary { yearSummary(data) }
 
+                // Colonne dalla larghezza vera (prima 4 fisse su Mac: nelle
+                // finestre strette i mesi si sovrapponevano). Sempre un
+                // divisore di 12, così le righe restano piene.
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: DS.l), count: yearColumns),
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: DS.l, alignment: .top),
+                        count: yearColumnCount(for: yearGridWidth)
+                    ),
                     spacing: DS.l
                 ) {
                     ForEach(yearMonths, id: \.self) { month in
                         yearMonthCard(month, data: data)
                     }
+                }
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    yearGridWidth = width
                 }
             }
             .padding(DS.l)
@@ -964,49 +977,62 @@ struct CalendarScreen: View {
         let deadlines = yearTasks.filter { $0.dueAt != nil && $0.kind != .event }.count
         let done = yearTasks.filter(\.isDone).count
 
-        return HStack(alignment: .center, spacing: DS.xl) {
-            HStack(spacing: DS.xl) {
-                yearStat(value: events, label: "Eventi", tint: .blue)
-                yearStat(value: deadlines, label: "Scadenze", tint: .orange)
-                yearStat(value: done, label: "Fatte", tint: DSColor.status(.done))
+        let stats = HStack(spacing: DS.xl) {
+            yearStat(value: events, label: "Eventi", tint: .blue)
+            yearStat(value: deadlines, label: "Scadenze", tint: .orange)
+            yearStat(value: done, label: "Fatte", tint: DSColor.status(.done))
+        }
+        let histogram = yearHistogram(counts: counts, maxCount: maxCount)
+
+        // Stretto: numeri sopra, istogramma sotto (prima traboccava).
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: DS.xl) {
+                stats
+                Spacer(minLength: DS.l)
+                histogram
             }
-
-            Spacer(minLength: DS.l)
-
-            // Istogramma: un tap sul mese ci porta dentro.
-            HStack(alignment: .bottom, spacing: DS.xs) {
-                ForEach(Array(yearMonths.enumerated()), id: \.offset) { index, month in
-                    Button {
-                        withAnimation(.dsSoft) {
-                            selectedDay = month
-                            modeRaw = CalendarViewMode.month.rawValue
-                        }
-                    } label: {
-                        VStack(spacing: 2) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(CalendarMath.isSameMonth(month, .now, calendar: calendar)
-                                      ? Color.accentColor
-                                      : Color.accentColor.opacity(0.35))
-                                .frame(width: 16,
-                                       height: max(3, CGFloat(counts[index]) / CGFloat(maxCount) * 40))
-                            Text(month.appFormatted(.dateTime.month(.narrow)))
-                                .font(.system(size: 8, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
+            VStack(alignment: .leading, spacing: DS.m) {
+                stats
+                histogram
             }
         }
         .padding(DS.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dsSurface(.card)
+    }
+
+    /// Istogramma del carico per mese: un tap sul mese ci porta dentro.
+    private func yearHistogram(counts: [Int], maxCount: Int) -> some View {
+        HStack(alignment: .bottom, spacing: DS.xs) {
+            ForEach(Array(yearMonths.enumerated()), id: \.offset) { index, month in
+                Button {
+                    withAnimation(.dsSoft) {
+                        selectedDay = month
+                        modeRaw = CalendarViewMode.month.rawValue
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(CalendarMath.isSameMonth(month, .now, calendar: calendar)
+                                  ? Color.accentColor
+                                  : Color.accentColor.opacity(0.35))
+                            .frame(width: 16,
+                                   height: max(3, CGFloat(counts[index]) / CGFloat(maxCount) * 40))
+                        Text(month.appFormatted(.dateTime.month(.narrow)))
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("\(month.appFormatted(.dateTime.month(.wide)).capitalized): \(counts[index])")
+            }
+        }
     }
 
     private func yearStat(value: Int, label: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(value)")
-                .font(.dsNumeric.weight(.bold))
-                .font(.title3)
+                .font(.system(.title2, design: .rounded).weight(.bold).monospacedDigit())
                 .foregroundStyle(tint)
                 .contentTransition(.numericText())
             Text(label)
@@ -1028,11 +1054,12 @@ struct CalendarScreen: View {
                         modeRaw = CalendarViewMode.month.rawValue
                     }
                 } label: {
-                    Text(month.appFormatted(.dateTime.month(.wide)))
+                    Text(month.appFormatted(.dateTime.month(.wide)).capitalized)
                         .font(.dsMeta.weight(.semibold))
                         .foregroundStyle(isCurrent ? Color.accentColor : .primary)
                 }
                 .buttonStyle(.plain)
+                .help("Apri il mese")
                 Spacer()
                 if count > 0 {
                     Text("\(count)")
@@ -1056,16 +1083,31 @@ struct CalendarScreen: View {
             )
         }
         .padding(DS.m)
-        .dsSurface(.card)
+        // L'evidenziazione sotto il contenuto ma SOPRA la superficie
+        // (prima stava sotto la card e non si vedeva).
         .dsHoverHighlight(cornerRadius: DS.Radius.medium)
+        .dsSurface(.card)
+        .overlay {
+            if isCurrent {
+                RoundedRectangle(cornerRadius: DS.Radius.medium)
+                    .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1.5)
+            }
+        }
     }
 
-    private var yearColumns: Int {
-        #if os(macOS)
-        4
-        #else
-        2
-        #endif
+    /// Quante colonne di mesi: il divisore di 12 più grande che ci sta.
+    private func yearColumnCount(for width: CGFloat) -> Int {
+        guard width > 0 else {
+            #if os(macOS)
+            return 4
+            #else
+            return 2
+            #endif
+        }
+        let minimumCard: CGFloat = 176
+        return [6, 4, 3, 2].first { columns in
+            CGFloat(columns) * minimumCard + CGFloat(columns - 1) * DS.l <= width
+        } ?? 1
     }
 
     private var yearMonths: [Date] {

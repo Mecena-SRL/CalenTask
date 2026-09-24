@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Observation
 
 /// Gantt 2.0 (D8/D15, F38, G8-G15): colonna dei nomi fissa a sinistra
 /// (la timeline parte DOPO le scritte), gerarchia fase → attività →
@@ -30,6 +31,14 @@ struct ProjectGanttView: View {
     /// G15 — colori per giorno della settimana ("2:#E5484D,3:#30A46C…").
     @AppStorage("ganttWeekdayColors") private var weekdayColorsRaw = ""
 
+    /// Scorrimento orizzontale della timeline: la testata fissa lo segue.
+    /// Un oggetto a parte, così ogni frame di scroll ridisegna solo la
+    /// testata e non tutto il Gantt.
+    @State private var scroll = GanttScrollState()
+    /// Incrementato dal pulsante "Oggi": la timeline ci torna.
+    @State private var todayRequest = 0
+    @State private var showsLegend = false
+
     private let dayWidth: CGFloat = 26
     private let headerHeight: CGFloat = 56
 
@@ -44,12 +53,37 @@ struct ProjectGanttView: View {
 
     var body: some View {
         let rows = makeRows()
+        let rowIndex = Dictionary(
+            rows.enumerated().map { ($0.element.task.id, $0.offset) },
+            uniquingKeysWith: { first, _ in first }
+        )
         let range = dateRange(for: rows)
         let days = dayCount(in: range)
         let totalWidth = CGFloat(days) * dayWidth
         let critical = criticalPathIDs(rows: rows)
+        // Righe vuote in fondo: c'è sempre spazio per il doppio clic "crea".
+        let gridHeight = CGFloat(rows.count + 3) * rowHeight
+        let todayOffset = Calendar.current.dateComponents(
+            [.day], from: range.lowerBound, to: Date.now.startOfDay
+        ).day ?? 0
+        // Oggi entra con qualche giorno di contesto a sinistra.
+        let todayScrollX = CGFloat(max(todayOffset - 3, 0)) * dayWidth
 
         VStack(spacing: 0) {
+            // Testata FISSA: controlli + mesi/giorni, che seguono lo scroll
+            // orizzontale della timeline (prima scorreva via verso l'alto).
+            HStack(spacing: 0) {
+                cornerControls
+                    .frame(width: nameColumnWidth, height: headerHeight)
+                Divider()
+                GanttPinnedHeader(
+                    scroll: scroll, range: range, days: days,
+                    dayWidth: dayWidth, height: headerHeight
+                )
+            }
+            .frame(height: headerHeight)
+            Divider()
+
             ScrollView(.vertical) {
                 // G8 — i nomi hanno la loro colonna: i giorni non ci passano
                 // sotto, la timeline comincia dopo le scritte.
@@ -57,23 +91,46 @@ struct ProjectGanttView: View {
                     namesColumn(rows: rows)
                         .frame(width: nameColumnWidth, alignment: .topLeading)
                     Divider()
-                    ScrollView(.horizontal) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            GanttHeader(range: range, days: days,
-                                        dayWidth: dayWidth, height: headerHeight)
-                            Divider()
-                            timelineGrid(rows: rows, range: range,
-                                         days: days, critical: critical)
-                                .frame(width: totalWidth,
-                                       height: CGFloat(rows.count) * rowHeight,
-                                       alignment: .topLeading)
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal) {
+                            ZStack(alignment: .topLeading) {
+                                timelineGrid(rows: rows, rowIndex: rowIndex, range: range,
+                                             days: days, critical: critical)
+                                    .frame(width: totalWidth, height: gridHeight,
+                                           alignment: .topLeading)
+                                // Àncora di "Oggi" per lo scroll programmato.
+                                Color.clear
+                                    .frame(width: 1, height: 1)
+                                    .padding(.leading, todayScrollX)
+                                    .id(GanttAnchor.today)
+                                    .allowsHitTesting(false)
+                            }
                         }
-                        .frame(width: totalWidth, alignment: .leading)
+                        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                            geometry.contentOffset.x
+                        } action: { _, offsetX in
+                            scroll.offsetX = offsetX
+                        }
+                        .onAppear {
+                            proxy.scrollTo(GanttAnchor.today, anchor: .leading)
+                        }
+                        .onChange(of: todayRequest) { _, _ in
+                            withAnimation(.dsSoft) {
+                                proxy.scrollTo(GanttAnchor.today, anchor: .leading)
+                            }
+                        }
                     }
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                legend
+            .overlay {
+                if rows.isEmpty {
+                    DSEmptyState(
+                        icon: "chart.bar.xaxis",
+                        title: "Nessuna attività nel Gantt",
+                        subtitle: "Aggiungi una fase o un'attività qui sotto, oppure fai doppio clic sulla griglia."
+                    )
+                    .allowsHitTesting(false)
+                }
             }
 
             Divider()
@@ -86,11 +143,8 @@ struct ProjectGanttView: View {
 
     private func namesColumn(rows: [GanttRow]) -> some View {
         VStack(spacing: 0) {
-            cornerControls
-                .frame(height: headerHeight)
-            Divider()
             ForEach(rows) { row in
-                nameRow(row)
+                nameRow(row, rows: rows)
                     .frame(height: rowHeight)
                     .background {
                         if row.isPhase {
@@ -102,14 +156,27 @@ struct ProjectGanttView: View {
         }
     }
 
-    /// G10/G15 — i controlli del Gantt nell'angolo: comprimi tutto,
-    /// vista semplice/complessa, colori dei giorni.
+    /// G10/G15 — i controlli del Gantt nell'angolo: oggi, comprimi tutto,
+    /// vista semplice/complessa, colori dei giorni, guida.
     private var cornerControls: some View {
         HStack(spacing: DS.s) {
             Text("Attività")
                 .font(.dsCaption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Spacer()
+            Button {
+                todayRequest += 1
+            } label: {
+                Text("Oggi")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Vai a oggi")
+
             Button {
                 withAnimation(.dsQuick) { toggleCollapseAll() }
             } label: {
@@ -136,6 +203,19 @@ struct ProjectGanttView: View {
                               : "Vista completa (fase, etichetta, progresso)")
 
             weekdayColorsMenu
+
+            Button {
+                showsLegend = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Come si usa il Gantt")
+            .popover(isPresented: $showsLegend, arrowEdge: .bottom) {
+                legend
+            }
         }
         .padding(.horizontal, DS.s)
     }
@@ -231,7 +311,7 @@ struct ProjectGanttView: View {
     /// Una riga della colonna nomi: semplice (titolo) o complessa
     /// (titolo+fase / etichetta / progresso) — G10/G14.
     @ViewBuilder
-    private func nameRow(_ row: GanttRow) -> some View {
+    private func nameRow(_ row: GanttRow, rows: [GanttRow]) -> some View {
         let indent = CGFloat(row.depth) * 14
         HStack(spacing: DS.xs) {
             if row.hasChildren {
@@ -267,7 +347,7 @@ struct ProjectGanttView: View {
         .padding(.trailing, DS.xs)
         .contentShape(Rectangle())
         .onTapGesture { router.open(taskID: row.task.id) }
-        .contextMenu { rowContextMenu(row) }
+        .contextMenu { rowContextMenu(row, rows: rows) }
     }
 
     @ViewBuilder
@@ -335,7 +415,7 @@ struct ProjectGanttView: View {
 
     /// G9 — il tasto destro lavora: aprire, vincolare, colorare, eliminare.
     @ViewBuilder
-    private func rowContextMenu(_ row: GanttRow) -> some View {
+    private func rowContextMenu(_ row: GanttRow, rows: [GanttRow]) -> some View {
         Button {
             router.open(taskID: row.task.id)
         } label: {
@@ -347,8 +427,8 @@ struct ProjectGanttView: View {
             phaseColorMenu(row.task)
         }
         Divider()
-        dependencyCreateMenu(for: row.task)
-        removeDependenciesMenu(for: row.task)
+        dependencyCreateMenu(for: row.task, rows: rows)
+        removeDependenciesMenu(for: row.task, rows: rows)
     }
 
     /// D57 — il colore della fase, anche dal Gantt (G9).
@@ -379,9 +459,9 @@ struct ProjectGanttView: View {
 
     /// G14 — le relazioni si creano anche dal menu, non solo col drag.
     @ViewBuilder
-    private func dependencyCreateMenu(for task: TodoTask) -> some View {
+    private func dependencyCreateMenu(for task: TodoTask, rows: [GanttRow]) -> some View {
         if !task.isPhase {
-            let candidates = makeRows()
+            let candidates = rows
                 .filter { !$0.isPhase && $0.task.id != task.id }
                 .prefix(25)
             if !candidates.isEmpty {
@@ -399,7 +479,7 @@ struct ProjectGanttView: View {
     }
 
     @ViewBuilder
-    private func removeDependenciesMenu(for task: TodoTask) -> some View {
+    private func removeDependenciesMenu(for task: TodoTask, rows: [GanttRow]) -> some View {
         let outgoing = allDependencies.filter { $0.fromTaskID == task.id }
         if !outgoing.isEmpty {
             ForEach(outgoing, id: \.id) { dependency in
@@ -407,15 +487,15 @@ struct ProjectGanttView: View {
                     dependency.deletedAt = .now
                     dependency.updatedAt = .now
                 } label: {
-                    Label("Rimuovi vincolo → \(title(of: dependency.toTaskID))",
+                    Label("Rimuovi vincolo → \(title(of: dependency.toTaskID, rows: rows))",
                           systemImage: "xmark.circle")
                 }
             }
         }
     }
 
-    private func title(of taskID: UUID) -> String {
-        makeRows().first { $0.task.id == taskID }?.task.title ?? "?"
+    private func title(of taskID: UUID, rows: [GanttRow]) -> String {
+        rows.first { $0.task.id == taskID }?.task.title ?? "?"
     }
 
     // MARK: Creazione dalla vista (D41)
@@ -478,6 +558,7 @@ struct ProjectGanttView: View {
         }
         modelContext.insert(task)
         task.project = project
+        task.touch()
         return task
     }
 
@@ -485,11 +566,12 @@ struct ProjectGanttView: View {
 
     @ViewBuilder
     private func timelineGrid(
-        rows: [GanttRow], range: ClosedRange<Date>, days: Int, critical: Set<UUID>
+        rows: [GanttRow], rowIndex: [UUID: Int], range: ClosedRange<Date>,
+        days: Int, critical: Set<UUID>
     ) -> some View {
         ZStack(alignment: .topLeading) {
             GanttGridBackground(
-                range: range, days: days, rowCount: rows.count,
+                range: range, days: days, rowCount: rows.count + 3,
                 dayWidth: dayWidth, rowHeight: rowHeight,
                 weekdayColors: weekdayColors.mapValues(\.0)
             )
@@ -541,20 +623,20 @@ struct ProjectGanttView: View {
                 dependencies: projectDependencies(rows: rows),
                 linkDraft: linkDraft,
                 criticalIDs: critical,
-                barFrame: { barFrame(for: $0, rows: rows, range: range) }
+                barFrame: { barFrame(for: $0, rows: rows, rowIndex: rowIndex, range: range) }
             )
 
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+            ForEach(rows) { row in
                 GanttBarRow(
                     row: row,
-                    frame: barFrame(for: row.task.id, rows: rows, range: range),
+                    frame: barFrame(for: row.task.id, rows: rows, rowIndex: rowIndex, range: range),
                     dayWidth: dayWidth,
                     rowHeight: rowHeight,
                     tint: tint(for: row),
                     isCritical: critical.contains(row.task.id),
                     progress: progress(of: row.task),
                     assigneeInitials: row.isPhase ? nil : assigneeInitials(for: row.task),
-                    contextMenu: { AnyView(rowContextMenu(row)) },
+                    contextMenu: { AnyView(rowContextMenu(row, rows: rows)) },
                     onMoveDays: { shift(row.task, byDays: $0) },
                     onResizeEndDays: { resize(row.task, byDays: $0) },
                     onResizeStartDays: { resizeStart(row.task, byDays: $0) },
@@ -572,24 +654,26 @@ struct ProjectGanttView: View {
                     },
                     onOpen: { router.open(taskID: row.task.id) }
                 )
-                .offset(y: CGFloat(index) * rowHeight)
+                // Niente .offset(y:) qui: la barra si posiziona già con
+                // frame.minY (riga inclusa). Il doppio offset la mandava
+                // alla riga 2×i, lontano dal suo nome.
             }
         }
         .coordinateSpace(name: "ganttGrid")
     }
 
+    /// La legenda in un popover (prima copriva le barre in basso a destra).
     private var legend: some View {
-        HStack(spacing: DS.m) {
-            Label("Trascina per spostare", systemImage: "arrow.left.and.right")
-            Label("Maniglie: durata", systemImage: "arrow.right.to.line")
-            Label("Cerchio: vincolo", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-            Label("Doppio click sul vuoto: crea", systemImage: "plus.circle")
+        VStack(alignment: .leading, spacing: DS.s) {
+            Label("Trascina una barra per spostarla", systemImage: "arrow.left.and.right")
+            Label("Maniglie ai lati: inizio e fine", systemImage: "arrow.right.to.line")
+            Label("Cerchio a destra: trascina per un vincolo", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+            Label("Doppio clic sul vuoto: nuova attività", systemImage: "plus.circle")
+            Label("Tasto destro: tutte le azioni", systemImage: "contextualmenu.and.cursorarrow")
         }
         .font(.dsCaption)
         .foregroundStyle(.secondary)
-        .padding(DS.s)
-        .background(.thinMaterial, in: Capsule())
-        .padding(DS.m)
+        .padding(DS.l)
     }
 
     // MARK: Rows & geometry
@@ -696,8 +780,10 @@ struct ProjectGanttView: View {
         return (min(start, end).startOfDay, max(start, end).startOfDay)
     }
 
-    private func barFrame(for taskID: UUID, rows: [GanttRow], range: ClosedRange<Date>) -> CGRect? {
-        guard let index = rows.firstIndex(where: { $0.task.id == taskID }),
+    private func barFrame(
+        for taskID: UUID, rows: [GanttRow], rowIndex: [UUID: Int], range: ClosedRange<Date>
+    ) -> CGRect? {
+        guard let index = rowIndex[taskID], rows.indices.contains(index),
               let span = barSpan(for: rows[index])
         else { return nil }
         let calendar = Calendar.current
@@ -800,28 +886,31 @@ struct ProjectGanttView: View {
         task.touch()
     }
 
+    /// La maniglia destra sposta la FINE di giorni interi, conservando
+    /// l'orario (prima la portava a mezzanotte: un evento 10–11 accorciato
+    /// finiva prima di iniziare).
     private func resize(_ task: TodoTask, byDays days: Int) {
         guard days != 0, !task.isPhase else { return }
         let calendar = Calendar.current
-        guard let span = taskSpan(task) else { return }
-        let newEnd = calendar.date(byAdding: .day, value: days, to: span.end) ?? span.end
-        let clampedEnd = max(newEnd, span.start)
-        if task.endAt != nil {
-            task.endAt = clampedEnd
-        } else {
-            task.dueAt = clampedEnd
+        if let end = task.endAt {
+            task.setEnd(calendar.date(byAdding: .day, value: days, to: end) ?? end)
+        } else if let base = task.dueAt ?? task.startAt {
+            var newDue = calendar.date(byAdding: .day, value: days, to: base) ?? base
+            if let start = task.startAt { newDue = max(newDue, start) }
+            task.setDue(newDue)
         }
-        task.touch()
     }
 
     /// G14 — la maniglia sinistra sposta l'INIZIO (la fine resta ferma).
     private func resizeStart(_ task: TodoTask, byDays days: Int) {
         guard days != 0, !task.isPhase else { return }
         let calendar = Calendar.current
-        guard let span = taskSpan(task) else { return }
-        let newStart = calendar.date(byAdding: .day, value: days, to: span.start) ?? span.start
-        task.startAt = min(newStart, span.end)
-        task.touch()
+        guard let base = task.startAt ?? task.dueAt?.startOfDay else { return }
+        var newStart = calendar.date(byAdding: .day, value: days, to: base) ?? base
+        if let limit = task.endAt ?? task.dueAt ?? task.startAt {
+            newStart = min(newStart, limit)
+        }
+        task.setStart(newStart)
     }
 
     private func createDependency(from task: TodoTask, at point: CGPoint, rows: [GanttRow]) {
@@ -849,6 +938,34 @@ struct ProjectGanttView: View {
 }
 
 // MARK: - Header
+
+/// Lo scroll orizzontale della timeline, condiviso con la testata fissa.
+@Observable
+final class GanttScrollState {
+    var offsetX: CGFloat = 0
+}
+
+private enum GanttAnchor: Hashable {
+    case today
+}
+
+/// La testata mesi/giorni fuori dallo scroll verticale: resta in vista e
+/// segue lo scroll orizzontale della timeline.
+private struct GanttPinnedHeader: View {
+    let scroll: GanttScrollState
+    let range: ClosedRange<Date>
+    let days: Int
+    let dayWidth: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        GanttHeader(range: range, days: days, dayWidth: dayWidth, height: height)
+            .frame(width: CGFloat(days) * dayWidth, alignment: .leading)
+            .offset(x: -scroll.offsetX)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
+    }
+}
 
 /// F38 — header a DUE livelli (pattern TeamGantt/Vikunja): la fascia dei
 /// mesi sopra, i giorni con l'iniziale del giorno della settimana sotto.
