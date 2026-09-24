@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// Riga condivisa di un modulo: icona, titolo, stato — nella barra laterale

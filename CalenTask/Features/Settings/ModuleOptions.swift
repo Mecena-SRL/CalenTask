@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// Le preferenze proprie di ogni modulo, sotto le sue "Funzioni".

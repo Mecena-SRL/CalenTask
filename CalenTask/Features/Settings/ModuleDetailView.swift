@@ -1,4 +1,6 @@
+import Foundation
 import SwiftUI
+import SwiftData
 
 /// La pagina di UN modulo (richiesta di Ivan, 2026-09-10: i moduli sono
 /// "quasi app personalizzabili nelle funzioni al loro interno"): testata con
