@@ -3,12 +3,10 @@ name: Smoke
 # Avvio reale dell'app (Release, firma ad-hoc come il DMG) su un Mac della
 # CI: resta viva per un minuto? Se crasha o si blocca, il job fallisce e
 # stampa crash report, eccezioni dal log di sistema e screenshot (artifact).
+# Solo a mano (Actions › Smoke › Run workflow): un Mac della CI costa 10×
+# i minuti di Linux, e il repository è privato.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "CalenTask/**"
-      - ".github/workflows/smoke.yml"
 
 concurrency:
   group: smoke-${{ github.ref }}
