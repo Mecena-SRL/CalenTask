@@ -243,19 +243,6 @@ private struct InboxFilterBar: View {
     }
 }
 
-extension TodoTask {
-    /// Inbox = no project, not deleted, not done. Phases and templates never
-    /// surface here (they are containers/blueprints, not actionable items).
-    static var inboxPredicate: Predicate<TodoTask> {
-        let doneRaw = TaskStatus.done.rawValue
-        let phaseRaw = TaskKind.phase.rawValue
-        return #Predicate<TodoTask> { task in
-            task.project == nil && task.deletedAt == nil && task.statusRaw != doneRaw
-                && task.kindRaw != phaseRaw && !task.isTemplate
-        }
-    }
-}
-
 #Preview {
     InboxView()
         .environment(AppRouter())

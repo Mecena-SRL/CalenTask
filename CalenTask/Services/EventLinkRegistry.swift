@@ -42,6 +42,31 @@ struct EventLinkRegistry {
         save()
     }
 
+    // MARK: Occorrenze di serie (#2)
+
+    /// Un evento ricorrente del calendario si importa per OCCORRENZA: tutte
+    /// condividono `eventIdentifier`, quindi la chiave aggiunge la data
+    /// originale dell'occorrenza (stabile anche se la si sposta). `series` è
+    /// l'UID iCalendar (`calendarItemExternalIdentifier`), che resta uguale
+    /// anche sulle occorrenze staccate dalla serie.
+    static let occurrencePrefix = "occ|"
+
+    static func occurrenceKey(series: String, occurrenceDate: Date) -> String {
+        "\(occurrencePrefix)\(series)|\(Int(occurrenceDate.timeIntervalSince1970.rounded()))"
+    }
+
+    /// Serie e data di una chiave di occorrenza; nil per le chiavi semplici.
+    static func occurrence(fromKey key: String) -> (series: String, date: Date)? {
+        guard key.hasPrefix(occurrencePrefix),
+              let separator = key.lastIndex(of: "|")
+        else { return nil }
+        let seriesStart = key.index(key.startIndex, offsetBy: occurrencePrefix.count)
+        guard separator > seriesStart,
+              let seconds = Int(key[key.index(after: separator)...])
+        else { return nil }
+        return (String(key[seriesStart..<separator]), Date(timeIntervalSince1970: TimeInterval(seconds)))
+    }
+
     private func save() {
         defaults.set(links.mapValues(\.uuidString), forKey: Self.storageKey)
     }

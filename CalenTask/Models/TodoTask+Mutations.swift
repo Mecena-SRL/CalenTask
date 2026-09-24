@@ -91,8 +91,10 @@ extension TodoTask {
     func spawnNextOccurrence() {
         guard let frequency = recurrenceFrequency, let context = modelContext else { return }
         let calendar = Calendar.current
+        // #8 — l'ancora è la data di riferimento della PRIMA occorrenza.
+        let seriesAnchor = recurrenceAnchorAt ?? dueAt ?? startAt
 
-        func next(from date: Date?) -> Date? {
+        func next(from date: Date?, anchored: Bool) -> Date? {
             let anchor: Date
             switch recurrenceMode {
             case .fixed:
@@ -105,13 +107,20 @@ extension TodoTask {
                     bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: .now
                 ) ?? .now
             }
-            return calendar.date(
+            let result = calendar.date(
                 byAdding: frequency.calendarComponent, value: max(1, recurrenceInterval), to: anchor
+            )
+            guard anchored, recurrenceMode == .fixed,
+                  let result, let date, let seriesAnchor
+            else { return result }
+            return Self.restoringAnchorDay(
+                result, previous: date, anchor: seriesAnchor, frequency: frequency, calendar: calendar
             )
         }
 
-        let nextDue = next(from: dueAt)
-        let nextStart = next(from: startAt)
+        // L'ancora vale per la data di riferimento (scadenza, se c'è).
+        let nextDue = next(from: dueAt, anchored: true)
+        let nextStart = next(from: startAt, anchored: dueAt == nil)
         if let recurrenceEndAt {
             let probe = nextDue ?? nextStart ?? .distantFuture
             guard probe <= recurrenceEndAt else { return }
@@ -149,6 +158,7 @@ extension TodoTask {
         nextTask.recurrenceInterval = recurrenceInterval
         nextTask.recurrenceModeRaw = recurrenceModeRaw
         nextTask.recurrenceEndAt = recurrenceEndAt
+        nextTask.recurrenceAnchorAt = seriesAnchor
         // #8 — la serie non perde pezzi: colore, viaggio, fase della
         // pipeline e tag seguono l'occorrenza successiva.
         nextTask.colorHex = colorHex
@@ -159,6 +169,27 @@ extension TodoTask {
         nextTask.parentTask = parentTask
         nextTask.tags = tags
         NotificationService.shared.sync(task: nextTask)
+    }
+
+    /// #8 — Le ricorrenze mensili/annuali non scivolano a fine mese: se la
+    /// data precedente era stata schiacciata sull'ultimo giorno del mese
+    /// (31/01 → 28/02), la successiva torna al giorno dell'ancora (→ 31/03).
+    /// Una data spostata a mano a metà mese resta dov'è.
+    nonisolated static func restoringAnchorDay(
+        _ next: Date, previous: Date, anchor: Date,
+        frequency: RecurrenceFrequency, calendar: Calendar
+    ) -> Date {
+        guard frequency == .monthly || frequency == .yearly else { return next }
+        let anchorDay = calendar.component(.day, from: anchor)
+        let previousDay = calendar.component(.day, from: previous)
+        guard previousDay < anchorDay,
+              let previousMonth = calendar.range(of: .day, in: .month, for: previous),
+              previousDay == previousMonth.upperBound - 1,
+              let nextMonth = calendar.range(of: .day, in: .month, for: next)
+        else { return next }
+        let targetDay = min(anchorDay, nextMonth.upperBound - 1)
+        let nextDay = calendar.component(.day, from: next)
+        return calendar.date(byAdding: .day, value: targetDay - nextDay, to: next) ?? next
     }
 
     private func nextOccurrenceExists(due: Date?, start: Date?, in context: ModelContext) -> Bool {

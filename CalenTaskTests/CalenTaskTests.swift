@@ -211,6 +211,48 @@ struct DomainModelTests {
         #expect(next.dueAt == expected)
     }
 
+    /// #8 — una mensile fissata al 31 non scivola: 31/01 → 28/02 → 31/03 →
+    /// 30/04 → 31/05 (prima: 28/03, 28/04…).
+    @Test func monthlyRecurrenceKeepsEndOfMonthAnchor() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        func date(_ month: Int, _ day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2027, month: month, day: day, hour: 9))!
+        }
+
+        var current = TodoTask(workspaceID: workspace.id, title: "Fattura fine mese",
+                               dueAt: date(1, 31), createdByID: me.id)
+        context.insert(current)
+        current.recurrenceFrequency = .monthly
+        current.recurrenceMode = .fixed
+
+        for expected in [date(2, 28), date(3, 31), date(4, 30), date(5, 31)] {
+            current.toggleDone()
+            try context.save()
+            let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
+            let next = try #require(open.first { $0.title == "Fattura fine mese" })
+            #expect(next.dueAt == expected)
+            #expect(next.recurrenceAnchorAt == date(1, 31))
+            current = next
+        }
+
+        // Spostata a mano a metà mese: resta lì, niente ritorno al 31.
+        #expect(TodoTask.restoringAnchorDay(
+            date(3, 15), previous: date(2, 15), anchor: date(1, 31),
+            frequency: .monthly, calendar: calendar
+        ) == date(3, 15))
+        // Annuale del 29/02: negli anni bisestili torna il 29.
+        let leap = calendar.date(from: DateComponents(year: 2028, month: 2, day: 29, hour: 9))!
+        let feb2031 = calendar.date(from: DateComponents(year: 2031, month: 2, day: 28, hour: 9))!
+        let feb2032 = calendar.date(from: DateComponents(year: 2032, month: 2, day: 28, hour: 9))!
+        let restored = TodoTask.restoringAnchorDay(
+            feb2032, previous: feb2031, anchor: leap, frequency: .yearly, calendar: calendar
+        )
+        #expect(calendar.component(.day, from: restored) == 29)
+    }
+
     @Test func recurrenceStopsAfterEndDate() throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -681,6 +723,115 @@ struct DomainModelTests {
 
         registry.unlink(event: "EV-2")
         #expect(EventLinkRegistry(defaults: defaults).links.isEmpty)
+    }
+
+    /// #2 — ogni occorrenza di una serie ha la sua chiave (serie + data
+    /// originale), distinta dagli id semplici: due settimane = due task.
+    @Test func recurringEventOccurrencesHaveDistinctKeys() throws {
+        let suite = "EventLinkRegistryTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let monday = Date(timeIntervalSince1970: 1_790_000_000)
+        let first = EventLinkRegistry.occurrenceKey(series: "UID|riunione", occurrenceDate: monday)
+        let second = EventLinkRegistry.occurrenceKey(
+            series: "UID|riunione", occurrenceDate: monday.addingTimeInterval(7 * 86_400)
+        )
+        #expect(first != second)
+        let parsed = try #require(EventLinkRegistry.occurrence(fromKey: first))
+        #expect(parsed.series == "UID|riunione")
+        #expect(parsed.date == monday)
+        #expect(EventLinkRegistry.occurrence(fromKey: "EV-1")?.series == nil)
+        #expect(EventLinkRegistry.occurrence(fromKey: "occ||123")?.series == nil)
+
+        let taskA = UUID(), taskB = UUID()
+        var registry = EventLinkRegistry(defaults: defaults)
+        registry.link(event: first, to: taskA)
+        registry.link(event: second, to: taskB)
+        let reloaded = EventLinkRegistry(defaults: defaults)
+        #expect(reloaded.taskID(forEvent: first) == taskA)
+        #expect(reloaded.taskID(forEvent: second) == taskB)
+    }
+
+    /// #2 — una serie resta "dell'app" solo se la task è nata prima
+    /// dell'evento; le note si uniscono invece di essere sovrascritte.
+    @Test func calendarSeriesOwnershipAndNotesMerge() {
+        let created = Date(timeIntervalSince1970: 1_790_000_000)
+        #expect(CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: created.addingTimeInterval(5)
+        ))
+        // Import del codice vecchio: task nata dopo l'evento di sistema.
+        #expect(!CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: created.addingTimeInterval(-86_400)
+        ))
+        #expect(!CalendarSyncService.isAppOwnedSeries(
+            taskSource: .imported, taskCreatedAt: created, eventCreatedAt: nil
+        ))
+        #expect(CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: nil
+        ))
+
+        #expect(CalendarSyncService.mergedNotes(local: "Portare il contratto", remote: nil) == "Portare il contratto")
+        #expect(CalendarSyncService.mergedNotes(local: "", remote: "Sala B") == "Sala B")
+        #expect(CalendarSyncService.mergedNotes(
+            local: "Portare il contratto\n\nSala B", remote: "Sala B"
+        ) == "Portare il contratto\n\nSala B")
+        #expect(CalendarSyncService.mergedNotes(local: "Sala B", remote: "Sala B, 2° piano") == "Sala B, 2° piano")
+        #expect(CalendarSyncService.mergedNotes(
+            local: "Portare il contratto", remote: "Sala B"
+        ) == "Portare il contratto\n\nSala B")
+    }
+
+    /// #5 — il calendario carica dallo store solo la finestra visibile e lo
+    /// spazio scelto: eventi su più giorni e fasi che la attraversano ci
+    /// sono, il resto no.
+    @Test func calendarWindowPredicatesFilterInStore() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.app
+        func day(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 10) -> Date {
+            calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+        }
+        @discardableResult
+        func add(_ title: String, kind: TaskKind = .task, status: TaskStatus = .todo,
+                 start: Date? = nil, end: Date? = nil, due: Date? = nil,
+                 workspaceID: UUID? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title, kind: kind,
+                                status: status, startAt: start, endAt: end, dueAt: due,
+                                createdByID: me.id)
+            context.insert(task)
+            return task
+        }
+
+        add("Riunione", kind: .event, start: day(2026, 10, 10), end: day(2026, 10, 10, 11))
+        add("Trasferta", kind: .event, start: day(2026, 8, 1), end: day(2026, 9, 1))
+        add("Fase", kind: .phase, start: day(2026, 6, 1), due: day(2026, 12, 31))
+        add("Scadenza", due: day(2026, 11, 5))
+        add("Da pianificare")
+        add("Fatta senza date", status: .done)
+        add("Lontana", kind: .event, start: day(2027, 3, 1), end: day(2027, 3, 1, 11))
+        add("Scaduta a gennaio", due: day(2026, 1, 10))
+        add("Cancellata", kind: .event, start: day(2026, 10, 10)).deletedAt = .now
+        let other = UUID()
+        add("Altro spazio", kind: .event, start: day(2026, 10, 12), workspaceID: other)
+
+        let window = CalendarScreen.loadWindow(for: .month, around: day(2026, 10, 15), calendar: calendar)
+        #expect(window.contains(day(2026, 10, 1)) && window.contains(day(2026, 10, 31)))
+        #expect(!window.contains(day(2027, 3, 1)))
+
+        func titles(_ workspaceID: UUID?) throws -> Set<String> {
+            Set(try TodoTask.fetchCalendarWindow(
+                from: window.start, to: window.end, workspaceID: workspaceID, in: context
+            ).map(\.title))
+        }
+        #expect(try titles(workspace.id) == ["Riunione", "Trasferta", "Fase", "Scadenza", "Da pianificare"])
+        #expect(try titles(nil).contains("Altro spazio"))
+
+        #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.openPredicate(workspaceID: other))) == 1)
+        #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.inboxPredicate(workspaceID: other))) == 1)
+        #expect(WorkspaceScope.filter([workspace], raw: other.uuidString, id: \.id).isEmpty)
+        #expect(WorkspaceScope.filter([workspace], raw: workspace.id.uuidString, id: \.id).count == 1)
     }
 
     @Test func freeSlotsSkipBusyIntervals() throws {
