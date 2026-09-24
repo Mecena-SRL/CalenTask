@@ -72,15 +72,15 @@ struct TaskDetailView: View {
                     }
                     .toggleStyle(.switch)
                     DSDateField(label: "Inizio", systemImage: "clock", tint: .blue,
-                                date: dateBinding(\.startAt), includesTime: !task.allDay)
+                                date: startBinding, includesTime: !task.allDay)
                     DSDateField(label: "Fine", systemImage: "clock.badge.checkmark", tint: .blue,
-                                date: dateBinding(\.endAt), includesTime: !task.allDay)
+                                date: endBinding, includesTime: !task.allDay)
                 } else {
                     // S4 + F6: inizio e fine come ogni calendario, scadenza distinta.
                     DSDateField(label: "Inizio", systemImage: "calendar.badge.clock",
-                                tint: .teal, date: dateBinding(\.startAt))
+                                tint: .teal, date: startBinding)
                     DSDateField(label: "Fine", systemImage: "calendar.badge.checkmark",
-                                tint: .teal, date: dateBinding(\.endAt))
+                                tint: .teal, date: endBinding)
                     DSDateField(label: "Scadenza", systemImage: "flag", tint: .orange,
                                 date: dateBinding(\.dueAt))
                 }
@@ -356,6 +356,15 @@ struct TaskDetailView: View {
             get: { task[keyPath: keyPath] },
             set: { task[keyPath: keyPath] = $0; task.touch() }
         )
+    }
+
+    /// Inizio e fine passano dal funnel che le tiene in ordine.
+    private var startBinding: Binding<Date?> {
+        Binding(get: { task.startAt }, set: { task.setStart($0) })
+    }
+
+    private var endBinding: Binding<Date?> {
+        Binding(get: { task.endAt }, set: { task.setEnd($0) })
     }
 
     private var projectBinding: Binding<Project?> {
