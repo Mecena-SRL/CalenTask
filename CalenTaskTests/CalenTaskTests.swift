@@ -834,6 +834,31 @@ struct DomainModelTests {
         #expect(stats.byDay[calendar.startOfDay(for: at(1))] == 2)
     }
 
+    /// Impostazioni: la ricerca trova pagine, funzioni e preferenze (senza
+    /// badare a maiuscole e accenti); ogni funzione ha descrizione e icona e
+    /// quelle generali non finiscono nella pagina del modulo.
+    @Test func settingsSearchAndFeatureMetadata() {
+        #expect(SettingsSearch.results(for: "  ").isEmpty)
+
+        let weather = SettingsSearch.results(for: "meteo")
+        #expect(weather.map(\.page) == [.module(.calendar)])
+        #expect(weather.first?.matches == ["Meteo"])
+
+        #expect(SettingsSearch.results(for: "NOTIFICHE").contains { $0.page == .notifications })
+        #expect(SettingsSearch.results(for: "priorita").contains { $0.page == .module(.activities) })
+        #expect(SettingsSearch.results(for: "google").contains { $0.page == .sync })
+        #expect(SettingsSearch.results(for: "barra laterale").contains { $0.page == .appearance })
+
+        for feature in AppFeature.allCases {
+            #expect(!feature.detail.isEmpty && !feature.icon.isEmpty)
+            #expect(SettingsSearch.results(for: feature.title).contains { $0.page == SettingsPage.page(for: feature) })
+        }
+        #expect(!AppFeature.moduleFeatures(of: .calendar).contains(.todayInspector))
+        #expect(!AppFeature.moduleFeatures(of: .calendar).contains(.sidebarMiniCalendar))
+        #expect(SettingsPage.page(for: .sidebarMiniCalendar) == .appearance)
+        #expect(SettingsPage.page(for: .tags) == .module(.activities))
+    }
+
     @Test func calendarWindowPredicatesFilterInStore() throws {
         let container = try makeContainer()
         let context = container.mainContext

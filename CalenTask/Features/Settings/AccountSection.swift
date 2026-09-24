@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Il tuo account, sempre a portata di mano (richiesta v6): profilo
-/// modificabile + stato della sincronizzazione iCloud. Quando arriverà il
+/// Il tuo profilo, modificabile (richiesta v6). Lo stato di iCloud vive in
+/// Impostazioni › Sincronizzazione (`ICloudStatusRow`). Quando arriverà il
 /// backend multi-utente (Supabase), il login vivrà qui.
 struct AccountSection: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,38 +11,7 @@ struct AccountSection: View {
            sort: \UserProfile.createdAt)
     private var people: [UserProfile]
 
-    private var me: UserProfile? {
-        let currentID = UserDefaults.standard.string(forKey: SeedService.userDefaultsKey)
-            .flatMap(UUID.init(uuidString:))
-        return people.first { $0.id == currentID } ?? people.first
-    }
-
-    /// A6 (audit account): la modalità EFFETTIVA dello store — non "c'è un
-    /// Apple ID collegato" (`ubiquityIdentityToken`), che è vero anche
-    /// quando lo store è locale (simulatore, entitlement mancante).
-    private var isICloudActive: Bool {
-        StoreMode.isCloudKit
-    }
-
-    /// Un Apple ID è collegato al sistema, indipendentemente da quale store
-    /// l'app abbia davvero aperto: distinto apposta da `isICloudActive`.
-    private var hasSystemICloudAccount: Bool {
-        FileManager.default.ubiquityIdentityToken != nil
-    }
-
-    private var icloudDetail: String {
-        if isICloudActive {
-            return "I dati seguono il tuo Apple ID su Mac e iPhone"
-        }
-        // #17 — prima questo caso cadeva in silenzio sullo store locale.
-        if let failure = StoreMode.cloudKitFailure {
-            return "iCloud non si è aperto (\(failure)): i dati restano solo su questo dispositivo"
-        }
-        if hasSystemICloudAccount {
-            return "Apple ID collegato, ma questa build usa lo store locale (simulatore o firma senza iCloud)"
-        }
-        return "Accedi a iCloud nelle impostazioni di sistema"
-    }
+    private var me: UserProfile? { UserProfile.current(in: people) }
 
     var body: some View {
         Section {
@@ -71,21 +40,10 @@ struct AccountSection: View {
                 }
                 .padding(.vertical, DS.xs)
             }
-
-            DSFieldRow(
-                label: isICloudActive ? "Sincronizzazione iCloud" : "iCloud non attivo",
-                systemImage: isICloudActive ? "checkmark.icloud.fill" : "xmark.icloud",
-                tint: isICloudActive ? .cyan : .orange
-            ) {
-                Text(icloudDetail)
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            }
         } header: {
-            Text("Account")
+            Text("Profilo")
         } footer: {
-            Text("Account multi-utente con login in arrivo: il profilo che imposti qui sarà la base.")
+            Text("Account multi-utente con login in arrivo: il profilo che imposti qui sarà la base. Lo stato di iCloud è in Sincronizzazione.")
                 .font(.dsCaption)
         }
     }
