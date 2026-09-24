@@ -63,6 +63,7 @@
 		2CB37C932FD8CDC9006722B0 /* Exceptions for "CalenTask" folder in "CalenTask" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				graphify-out,
 				Info.plist,
 			);
 			target = 2CB37C6F2FD8CDC7006722B0 /* CalenTask */;

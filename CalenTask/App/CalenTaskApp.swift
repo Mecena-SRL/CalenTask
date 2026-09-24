@@ -52,7 +52,7 @@ struct CalenTaskApp: App {
     static let cloudKitContainerID = "iCloud.it.mecena.CalenTask"
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: CalenTaskSchemaV6.self)
+        let schema = Schema(versionedSchema: CalenTaskSchemaV10.self)
 
         // 1ª scelta: database privato CloudKit — stessa vita su Mac e iPhone.
         // Migrazione AUTOMATICA lightweight (fix v7): il piano a stadi
