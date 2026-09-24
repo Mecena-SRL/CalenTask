@@ -79,9 +79,9 @@ struct CalendarScreen: View {
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var allProjects: [Project]
 
-    /// All live tasks; windows are filtered in memory (current scale).
-    @Query(filter: #Predicate<TodoTask> { $0.deletedAt == nil && !$0.isTemplate })
-    private var allTasks: [TodoTask]
+    /// #5 — Solo la finestra caricata (`loadWindow`) dello spazio scelto,
+    /// filtrata nello store da `CalendarWindowQuery`.
+    @State private var windowTasks: [TodoTask] = []
 
     /// I membri dello spazio: risolvono `assigneeID` per le corsie "per persona".
     @Query(filter: #Predicate<UserProfile> { $0.deletedAt == nil })
@@ -89,8 +89,36 @@ struct CalendarScreen: View {
 
     @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
 
-    private var tasks: [TodoTask] {
-        WorkspaceScope.filter(allTasks, raw: scopeRaw, id: \.workspaceID)
+    private var tasks: [TodoTask] { windowTasks }
+
+    private var loadWindow: DateInterval {
+        Self.loadWindow(for: mode, around: selectedDay, calendar: calendar)
+    }
+
+    /// #5 — Il periodo che il calendario carica dallo store: il mese (o il
+    /// trimestre, o l'anno) del giorno scelto ± 6 settimane, così griglia
+    /// del mese, settimane a cavallo e navigazione vicina non ricaricano a
+    /// ogni passo.
+    static func loadWindow(for mode: CalendarViewMode, around day: Date, calendar: Calendar) -> DateInterval {
+        let base: DateInterval?
+        switch mode {
+        case .year:
+            base = calendar.dateInterval(of: .year, for: day)
+        case .quarter:
+            let month = calendar.component(.month, from: day)
+            let year = calendar.component(.year, from: day)
+            base = calendar.date(from: DateComponents(year: year, month: (month - 1) / 3 * 3 + 1))
+                .flatMap { start in
+                    calendar.date(byAdding: .month, value: 3, to: start)
+                        .map { DateInterval(start: start, end: $0) }
+                }
+        case .day, .week, .month:
+            base = calendar.dateInterval(of: .month, for: day)
+        }
+        let anchor = base ?? DateInterval(start: calendar.startOfDay(for: day), duration: 86_400)
+        let start = calendar.date(byAdding: .day, value: -42, to: anchor.start) ?? anchor.start
+        let end = calendar.date(byAdding: .day, value: 42, to: anchor.end) ?? anchor.end
+        return DateInterval(start: start, end: end)
     }
 
     private let calendar = Calendar.app
@@ -180,6 +208,12 @@ struct CalendarScreen: View {
                 .simultaneousGesture(densityOrScalePinch)
             }
             .background(DSColor.surfaceSecondary)
+            .background {
+                CalendarWindowQuery(
+                    window: loadWindow, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw)
+                ) { windowTasks = $0 }
+                .id("\(loadWindow.start.timeIntervalSince1970)|\(loadWindow.end.timeIntervalSince1970)|\(scopeRaw)")
+            }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("Calendario")
             #if os(iOS)
@@ -1017,8 +1051,17 @@ struct CalendarScreen: View {
 
     private func findSlots(duration: Int) {
         slotDuration = duration
+        // #5 — i prossimi 7 giorni si leggono dallo store: la finestra
+        // caricata segue il giorno selezionato, non oggi.
+        let start = calendar.startOfDay(for: .now)
+        let end = calendar.date(byAdding: .day, value: 8, to: start) ?? start
+        let upcoming = (try? modelContext.fetch(FetchDescriptor(
+            predicate: TodoTask.calendarStartPredicate(
+                from: start, to: end, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw)
+            )
+        ))) ?? []
         slotProposals = Self.freeSlots(
-            duration: duration, in: liveTasks, calendar: calendar
+            duration: duration, in: visible(upcoming), calendar: calendar
         )
         showsSlotResults = true
     }
@@ -1234,8 +1277,8 @@ struct CalendarScreen: View {
 
     private var indexKey: IndexKey {
         IndexKey(
-            count: allTasks.count,
-            updatedChecksum: allTasks.reduce(0) {
+            count: windowTasks.count,
+            updatedChecksum: windowTasks.reduce(0) {
                 $0 &+ Int($1.updatedAt.timeIntervalSinceReferenceDate * 1000)
             },
             scope: scopeRaw,
@@ -1244,7 +1287,9 @@ struct CalendarScreen: View {
         )
     }
 
-    private var liveTasks: [TodoTask] {
+    private var liveTasks: [TodoTask] { visible(tasks) }
+
+    private func visible(_ tasks: [TodoTask]) -> [TodoTask] {
         let hiddenIDs = hiddenProjectIDs
         return tasks.filter { task in
             guard !task.isPhase else { return false }
@@ -1271,6 +1316,43 @@ struct CalendarScreen: View {
     }
 
 
+}
+
+/// #5 — Le query del calendario: SOLO la finestra caricata e lo spazio
+/// scelto, filtrate nello store (prima: tutte le task di sempre, filtrate in
+/// memoria). Consegna i risultati quando cambiano davvero.
+private struct CalendarWindowQuery: View {
+    @Query private var started: [TodoTask]
+    @Query private var due: [TodoTask]
+    @Query private var unscheduled: [TodoTask]
+    let onChange: ([TodoTask]) -> Void
+
+    init(window: DateInterval, workspaceID: UUID?, onChange: @escaping ([TodoTask]) -> Void) {
+        _started = Query(filter: TodoTask.calendarStartPredicate(
+            from: window.start, to: window.end, workspaceID: workspaceID
+        ))
+        _due = Query(filter: TodoTask.calendarDuePredicate(
+            from: window.start, to: window.end, workspaceID: workspaceID
+        ))
+        _unscheduled = Query(filter: TodoTask.unscheduledPredicate(workspaceID: workspaceID))
+        self.onChange = onChange
+    }
+
+    var body: some View {
+        Color.clear
+            .onChange(of: resultsKey, initial: true) { _, _ in
+                onChange(TodoTask.mergingUnique(started, due, unscheduled))
+            }
+    }
+
+    /// Cambia a ogni `touch()` (updatedAt), inserimento o cancellazione.
+    private var resultsKey: [Int] {
+        [started, due, unscheduled].map { group in
+            group.reduce(group.count) {
+                $0 &+ $1.id.hashValue &+ Int($1.updatedAt.timeIntervalSinceReferenceDate * 1000)
+            }
+        }
+    }
 }
 
 #Preview {

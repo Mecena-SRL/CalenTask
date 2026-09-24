@@ -740,6 +740,65 @@ struct DomainModelTests {
         ) == "Portare il contratto\n\nSala B")
     }
 
+    /// #5 — il calendario carica dallo store solo la finestra visibile e lo
+    /// spazio scelto: eventi su più giorni e fasi che la attraversano ci
+    /// sono, il resto no.
+    @Test func calendarWindowPredicatesFilterInStore() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.app
+        func day(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 10) -> Date {
+            calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+        }
+        @discardableResult
+        func add(_ title: String, kind: TaskKind = .task, status: TaskStatus = .todo,
+                 start: Date? = nil, end: Date? = nil, due: Date? = nil,
+                 workspaceID: UUID? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title, kind: kind,
+                                status: status, startAt: start, endAt: end, dueAt: due,
+                                createdByID: me.id)
+            context.insert(task)
+            return task
+        }
+
+        add("Riunione", kind: .event, start: day(2026, 10, 10), end: day(2026, 10, 10, 11))
+        add("Trasferta", kind: .event, start: day(2026, 8, 1), end: day(2026, 9, 1))
+        add("Fase", kind: .phase, start: day(2026, 6, 1), due: day(2026, 12, 31))
+        add("Scadenza", due: day(2026, 11, 5))
+        add("Da pianificare")
+        add("Fatta senza date", status: .done)
+        add("Lontana", kind: .event, start: day(2027, 3, 1), end: day(2027, 3, 1, 11))
+        add("Scaduta a gennaio", due: day(2026, 1, 10))
+        add("Cancellata", kind: .event, start: day(2026, 10, 10)).deletedAt = .now
+        let other = UUID()
+        add("Altro spazio", kind: .event, start: day(2026, 10, 12), workspaceID: other)
+
+        let window = CalendarScreen.loadWindow(for: .month, around: day(2026, 10, 15), calendar: calendar)
+        #expect(window.contains(day(2026, 10, 1)) && window.contains(day(2026, 10, 31)))
+        #expect(!window.contains(day(2027, 3, 1)))
+
+        func titles(_ workspaceID: UUID?) throws -> Set<String> {
+            let started = try context.fetch(FetchDescriptor(predicate: TodoTask.calendarStartPredicate(
+                from: window.start, to: window.end, workspaceID: workspaceID
+            )))
+            let due = try context.fetch(FetchDescriptor(predicate: TodoTask.calendarDuePredicate(
+                from: window.start, to: window.end, workspaceID: workspaceID
+            )))
+            let unscheduled = try context.fetch(FetchDescriptor(
+                predicate: TodoTask.unscheduledPredicate(workspaceID: workspaceID)
+            ))
+            return Set(TodoTask.mergingUnique(started, due, unscheduled).map(\.title))
+        }
+        #expect(try titles(workspace.id) == ["Riunione", "Trasferta", "Fase", "Scadenza", "Da pianificare"])
+        #expect(try titles(nil).contains("Altro spazio"))
+
+        #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.openPredicate(workspaceID: other))) == 1)
+        #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.inboxPredicate(workspaceID: other))) == 1)
+        #expect(WorkspaceScope.filter([workspace], raw: other.uuidString, id: \.id).isEmpty)
+        #expect(WorkspaceScope.filter([workspace], raw: workspace.id.uuidString, id: \.id).count == 1)
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext

@@ -979,17 +979,6 @@ struct DashboardView: View {
 
 }
 
-extension TodoTask {
-    static var openPredicate: Predicate<TodoTask> {
-        let doneRaw = TaskStatus.done.rawValue
-        let phaseRaw = TaskKind.phase.rawValue
-        return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && task.statusRaw != doneRaw
-                && task.kindRaw != phaseRaw && !task.isTemplate
-        }
-    }
-}
-
 #Preview {
     DashboardView()
         .environment(AppRouter())

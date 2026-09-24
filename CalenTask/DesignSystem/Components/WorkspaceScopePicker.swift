@@ -8,12 +8,19 @@ enum WorkspaceScope {
 
     /// "all" oppure l'UUID del workspace.
     static func matches(_ workspaceID: UUID, raw: String) -> Bool {
-        raw == "all" || raw == workspaceID.uuidString
+        raw == "all" || UUID(uuidString: raw) == workspaceID
     }
 
+    /// #5 — Lo spazio scelto, per i predicati nello store (nil = tutti).
+    static func workspaceID(raw: String) -> UUID? {
+        raw == "all" ? nil : UUID(uuidString: raw)
+    }
+
+    /// #5 — confronto tra UUID (non una String per elemento a ogni render).
     static func filter<T>(_ items: [T], raw: String, id: (T) -> UUID) -> [T] {
         guard raw != "all" else { return items }
-        return items.filter { id($0).uuidString == raw }
+        guard let workspaceID = UUID(uuidString: raw) else { return [] }
+        return items.filter { id($0) == workspaceID }
     }
 
     /// Dove atterra una nuova attività/progetto senza una destinazione
