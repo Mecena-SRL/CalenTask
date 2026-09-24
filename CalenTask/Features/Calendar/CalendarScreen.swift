@@ -952,13 +952,15 @@ struct CalendarScreen: View {
                         yearMonthCard(month, data: data)
                     }
                 }
-                .onGeometryChange(for: CGFloat.self) { proxy in
-                    proxy.size.width
-                } action: { width in
-                    yearGridWidth = width
-                }
             }
             .padding(DS.l)
+        }
+        // Misurata sullo ScrollView, non sul suo contenuto: la barra di
+        // scorrimento che compare/sparisce non rimette in gioco le colonne.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width - 2 * DS.l
+        } action: { width in
+            yearGridWidth = width
         }
     }
 
