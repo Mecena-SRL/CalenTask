@@ -199,4 +199,46 @@ enum AppFeature: String, CaseIterable, Identifiable {
         case .dashboardMetrics: "Indicatori numerici in Oggi"
         }
     }
+
+    /// Cosa fa, in una riga: sotto il titolo in Impostazioni.
+    var detail: String {
+        switch self {
+        case .calendarAdvancedViews: "Trimestre, anno e vista da 2 a 9 giorni."
+        case .calendarWeather: "Previsioni nelle viste giorno e settimana. La posizione serve solo al meteo."
+        case .calendarSummary: "Numeri dell'anno e disponibilità nelle viste lunghe."
+        case .calendarUnscheduled: "L'elenco delle attività ancora senza data, pronte da trascinare."
+        case .sidebarMiniCalendar: "Un mese in miniatura in fondo alla barra laterale."
+        case .todayInspector: "Agenda, scadenze e Inbox in una colonna a destra quando la finestra è larga."
+        case .smartLists: "Viste salvate con i loro filtri, nella barra laterale."
+        case .tags: "Etichette colorate per raggruppare le attività."
+        case .externalRequests: "Un modulo per registrare le richieste di clienti e collaboratori."
+        case .dashboardMetrics: "Contatori di oggi, settimana, arretrati e Inbox."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .calendarAdvancedViews: "calendar.badge.plus"
+        case .calendarWeather: "cloud.sun"
+        case .calendarSummary: "chart.bar.xaxis"
+        case .calendarUnscheduled: "tray"
+        case .sidebarMiniCalendar: "calendar.circle"
+        case .todayInspector: "sidebar.right"
+        case .smartLists: "line.3.horizontal.decrease.circle"
+        case .tags: "number"
+        case .externalRequests: "tray.and.arrow.down"
+        case .dashboardMetrics: "gauge.with.dots.needle.33percent"
+        }
+    }
+
+    /// Funzioni dell'interfaccia generale (finestra, barra laterale): in
+    /// Impostazioni stanno in Generale/Aspetto, non nella pagina del modulo.
+    var isGeneral: Bool {
+        self == .sidebarMiniCalendar || self == .todayInspector
+    }
+
+    /// Le funzioni che la pagina di un modulo mostra (e conta).
+    static func moduleFeatures(of module: AppModule) -> [AppFeature] {
+        allCases.filter { $0.module == module && !$0.isGeneral }
+    }
 }

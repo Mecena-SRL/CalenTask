@@ -1,218 +1,183 @@
 import SwiftUI
 import SwiftData
 
-/// Impostazioni (D43): tutte le personalizzazioni in un posto solo.
-/// macOS: scena Settings (⌘,). iOS: sheet dall'ingranaggio.
-#if os(macOS)
-/// Una sola voce nella barra laterale di Impostazioni — non due contenitori
-/// di navigazione annidati (era il bug: `NavigationSplitView` dentro una
-/// `TabView` rompeva sia il pulsante indietro sia il click sulle altre tab).
-private enum SettingsDestination: Hashable {
-    case appearance
-    case account
-    case module(AppModule)
-}
-#endif
-
+/// Impostazioni (D43, riviste): tutte le personalizzazioni in un posto solo.
+/// - In testa chi sei (account e iCloud);
+/// - **Generali**: come si comporta l'app;
+/// - **Moduli**: panoramica e una pagina per modulo.
+/// Con la ricerca in cima. macOS: scena Settings (⌘,), barra laterale +
+/// pagina. iOS: sheet dall'ingranaggio, elenco con push.
 struct SettingsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-
-    // Aspetto (D47)
-    @AppStorage(DSAppearance.storageKey) private var appearanceRaw = DSAppearance.auto.rawValue
-
-    #if os(macOS)
     @AppStorage(AppConfiguration.storageKey) private var configurationRaw = ""
+    @State private var router = SettingsRouter()
+    @State private var searchText = ""
+
     private var configuration: AppConfiguration { .decode(configurationRaw) }
-    @State private var selection: SettingsDestination? = .module(.calendar)
 
     private var reorderableModules: [AppModule] {
         configuration.moduleOrder.filter { $0 != .calendar }
     }
-    #endif
+
+    private var searchResults: [SettingsSearchResult] {
+        SettingsSearch.results(for: searchText)
+    }
 
     var body: some View {
         #if os(macOS)
         NavigationSplitView {
-            List(selection: $selection) {
-                Section("Generali") {
-                    settingsRow("Aspetto", systemImage: "paintbrush", tint: Color(hex: "#5B5BD6"))
-                        .tag(SettingsDestination.appearance)
-                    settingsRow("Account e spazi", systemImage: "person.crop.circle", tint: Color(hex: "#30A46C"))
-                        .tag(SettingsDestination.account)
+            List(selection: Binding(get: { router.selection }, set: { router.selection = $0 })) {
+                if searchText.isEmpty {
+                    sidebarSections
+                } else {
+                    searchSection { result in
+                        SettingsPageRow(page: result.page, subtitle: matchesLine(result))
+                            .tag(result.page)
+                    }
                 }
-                Section("La tua app") {
-                    Picker("All'avvio", selection: startPageBinding) {
-                        ForEach(AppStartPage.allCases.filter {
-                            $0 != .quick || configuration.isEnabled(.activities)
-                        }) { page in
-                            Text(page.title).tag(page)
+            }
+            .searchable(text: $searchText, placement: .sidebar, prompt: "Cerca")
+            .navigationSplitViewColumnWidth(min: 230, ideal: 250, max: 300)
+        } detail: {
+            SettingsPageView(page: router.selection ?? .general)
+                .id(router.selection)
+        }
+        // Come Impostazioni di Sistema: la barra laterale non si chiude.
+        .toolbar(removing: .sidebarToggle)
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 780, idealWidth: 860, minHeight: 540, idealHeight: 660)
+        .background(FloatingWindowConfigurator())
+        .environment(router)
+        #else
+        NavigationStack(path: Binding(get: { router.path }, set: { router.path = $0 })) {
+            List {
+                if searchText.isEmpty {
+                    rootSections
+                } else {
+                    searchSection { result in
+                        NavigationLink(value: result.page) {
+                            SettingsPageRow(page: result.page, subtitle: matchesLine(result))
                         }
                     }
                 }
-                Section {
-                    ModuleRowLabel(module: .calendar, configuration: configuration)
-                        .tag(SettingsDestination.module(.calendar))
-                    ForEach(reorderableModules) { module in
-                        ModuleRowLabel(module: module, configuration: configuration)
-                            .tag(SettingsDestination.module(module))
-                    }
-                    .onMove { source, destination in
-                        moveModules(from: source, to: destination, configurationRaw: &configurationRaw)
-                    }
-                } header: {
-                    Text("Moduli")
-                } footer: {
-                    Text("Trascina per riordinare: lo stesso ordine vale nella barra laterale dell'app.")
-                }
-                Section {
-                    Button("Ripristina configurazione essenziale") {
-                        configurationRaw = AppConfiguration.standard.encoded()
-                    }
-                }
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
-        } detail: {
-            settingsDetail
-        }
-        // Come Impostazioni di Sistema: la barra laterale non si chiude. Il
-        // toggle di sistema sparisce dalla toolbar; la larghezza minima sopra
-        // impedisce anche di trascinarla a zero.
-        .toolbar(removing: .sidebarToggle)
-        .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 760, idealWidth: 820, minHeight: 520, idealHeight: 640)
-        .background(FloatingWindowConfigurator())
-        #else
-        NavigationStack {
-            Form {
-                Section {
-                    NavigationLink { appearanceTab.navigationTitle("Aspetto") } label: {
-                        iOSSettingsRow("Aspetto", systemImage: "paintbrush", tint: Color(hex: "#5B5BD6"))
-                    }
-                    NavigationLink { accountTab.navigationTitle("Account e spazi") } label: {
-                        iOSSettingsRow("Account e spazi", systemImage: "person.crop.circle", tint: Color(hex: "#30A46C"))
-                    }
-                }
-                Section {
-                    NavigationLink { ModulesSettingsView() } label: {
-                        iOSSettingsRow("Moduli e schermata iniziale", systemImage: "square.grid.2x2", tint: Color.accentColor)
-                    }
-                }
+            .searchable(text: $searchText, prompt: "Cerca nelle impostazioni")
+            .navigationDestination(for: SettingsPage.self) { page in
+                SettingsPageView(page: page)
             }
             .navigationTitle("Impostazioni")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Fine") { dismiss() }
                 }
             }
         }
+        .environment(router)
         #endif
+    }
+
+    // MARK: Ricerca
+
+    private func matchesLine(_ result: SettingsSearchResult) -> String {
+        result.matches.isEmpty ? result.page.subtitle : result.matches.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func searchSection<Row: View>(
+        @ViewBuilder row: @escaping (SettingsSearchResult) -> Row
+    ) -> some View {
+        if searchResults.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+        } else {
+            Section("Risultati") {
+                ForEach(searchResults) { result in
+                    row(result)
+                }
+            }
+        }
     }
 
     // MARK: macOS — barra laterale unica
 
     #if os(macOS)
-    /// Riga della barra laterale nello stesso linguaggio dei moduli sotto:
-    /// badge colorato (`DSIconTile`, lo stesso di ogni campo nei form) invece
-    /// di un'icona piatta — coerente, non un'aggiunta ad hoc.
-    private func settingsRow(_ title: String, systemImage: String, tint: Color) -> some View {
-        Label {
-            Text(title).font(.dsMeta.weight(.medium))
-        } icon: {
-            DSIconTile(systemImage: systemImage, tint: tint)
-        }
-        .padding(.vertical, 3)
-    }
-
     @ViewBuilder
-    private var settingsDetail: some View {
-        switch selection {
-        case .appearance: appearanceTab.navigationTitle("Aspetto")
-        case .account: accountTab.navigationTitle("Account e spazi")
-        case .module(let module): ModuleDetailView(module: module)
-        case nil:
-            ContentUnavailableView(
-                "Seleziona una voce",
-                systemImage: "gearshape",
-                description: Text("Scegli una categoria dalla barra laterale.")
-            )
+    private var sidebarSections: some View {
+        Section {
+            SettingsAccountRow()
+                .tag(SettingsPage.account)
         }
-    }
-
-    private var startPageBinding: Binding<AppStartPage> {
-        Binding(get: {
-            configuration.startPage == .quick && !configuration.isEnabled(.activities)
-                ? .calendar : configuration.startPage
-        }, set: { value in
-            var updated = configuration
-            updated.startPage = value
-            configurationRaw = updated.encoded()
-        })
+        Section("Generali") {
+            ForEach(SettingsPage.generalPages) { page in
+                SettingsPageRow(page: page)
+                    .tag(page)
+            }
+        }
+        Section {
+            SettingsPageRow(page: .modules)
+                .tag(SettingsPage.modules)
+            ModuleRowLabel(module: .calendar, configuration: configuration)
+                .tag(SettingsPage.module(.calendar))
+            ForEach(reorderableModules) { module in
+                ModuleRowLabel(module: module, configuration: configuration)
+                    .tag(SettingsPage.module(module))
+            }
+            .onMove { source, destination in
+                moveModules(from: source, to: destination, configurationRaw: &configurationRaw)
+            }
+        } header: {
+            Text("Moduli")
+        }
     }
     #endif
 
-    private var accountTab: some View { Form { AccountSection(); WorkspacesSettingsSection() }.formStyle(.grouped) }
-    private var appearanceTab: some View { Form { appearanceSections }.formStyle(.grouped) }
+    // MARK: iPhone / iPad — elenco
 
-    private func iOSSettingsRow(_ title: String, systemImage: String, tint: Color) -> some View {
-        Label {
-            Text(title)
-        } icon: {
-            DSIconTile(systemImage: systemImage, tint: tint)
-        }
-    }
-
-    // MARK: Aspetto (D47) — tema alla maniera di Impostazioni di Sistema
-
+    #if !os(macOS)
     @ViewBuilder
-    private var appearanceSections: some View {
+    private var rootSections: some View {
         Section {
-            HStack(spacing: DS.m) {
-                ForEach(DSAppearance.available) { appearance in
-                    appearanceCard(appearance)
+            NavigationLink(value: SettingsPage.account) {
+                SettingsAccountRow()
+            }
+        }
+        Section("Generali") {
+            ForEach(SettingsPage.generalPages) { page in
+                NavigationLink(value: page) {
+                    SettingsPageRow(page: page)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.xs)
+        }
+        Section {
+            NavigationLink(value: SettingsPage.modules) {
+                SettingsPageRow(page: .modules, subtitle: "Accendi, spegni e riordina")
+            }
+            ForEach(configuration.moduleOrder) { module in
+                NavigationLink(value: SettingsPage.module(module)) {
+                    ModuleRowLabel(module: module, configuration: configuration)
+                }
+            }
         } header: {
-            Text("Tema")
-        } footer: {
-            #if os(macOS)
-            Text("Misto: sidebar scura, contenuto chiaro o secondo il sistema.")
-                .font(.dsCaption)
-            #endif
+            Text("Moduli")
         }
     }
+    #endif
+}
 
-    private func appearanceCard(_ appearance: DSAppearance) -> some View {
-        let isSelected = appearanceRaw == appearance.rawValue
-        return Button {
-            withAnimation(.dsQuick) { appearanceRaw = appearance.rawValue }
-        } label: {
-            VStack(spacing: DS.s) {
-                Image(systemName: appearance.systemImage)
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                    .frame(width: 52, height: 36)
-                    .background(
-                        DSColor.surfaceSecondary,
-                        in: RoundedRectangle(cornerRadius: DS.Radius.small)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: DS.Radius.small)
-                            .strokeBorder(
-                                isSelected ? Color.accentColor : DSColor.hairline,
-                                lineWidth: isSelected ? 2 : 1
-                            )
-                    }
-                Text(appearance.label)
-                    .font(.dsCaption.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-            }
-            .contentShape(Rectangle())
+/// La pagina per ogni voce: un solo `switch`, usato da barra laterale,
+/// elenco e ricerca.
+struct SettingsPageView: View {
+    let page: SettingsPage
+
+    var body: some View {
+        switch page {
+        case .general: GeneralSettingsView()
+        case .appearance: AppearanceSettingsView()
+        case .notifications: NotificationsSettingsView()
+        case .sync: SyncSettingsView()
+        case .account: AccountSettingsView()
+        case .modules: ModulesOverviewView()
+        case .module(let module): ModuleDetailView(module: module)
         }
-        .buttonStyle(.plain)
     }
 }
 

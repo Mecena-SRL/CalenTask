@@ -5,13 +5,15 @@ import SwiftUI
 struct DSIconTile: View {
     let systemImage: String
     var tint: Color = .accentColor
+    /// 28 nelle righe; più grande nelle testate (Impostazioni).
+    var size: CGFloat = 28
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.footnote.weight(.semibold))
+            .font(size == 28 ? .footnote.weight(.semibold) : .system(size: size * 0.46, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 28, height: 28)
-            .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7))
+            .frame(width: size, height: size)
+            .background(tint.gradient, in: RoundedRectangle(cornerRadius: size * 0.25))
     }
 }
 
