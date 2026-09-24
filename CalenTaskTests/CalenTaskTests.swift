@@ -683,6 +683,63 @@ struct DomainModelTests {
         #expect(EventLinkRegistry(defaults: defaults).links.isEmpty)
     }
 
+    /// #2 — ogni occorrenza di una serie ha la sua chiave (serie + data
+    /// originale), distinta dagli id semplici: due settimane = due task.
+    @Test func recurringEventOccurrencesHaveDistinctKeys() throws {
+        let suite = "EventLinkRegistryTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let monday = Date(timeIntervalSince1970: 1_790_000_000)
+        let first = EventLinkRegistry.occurrenceKey(series: "UID|riunione", occurrenceDate: monday)
+        let second = EventLinkRegistry.occurrenceKey(
+            series: "UID|riunione", occurrenceDate: monday.addingTimeInterval(7 * 86_400)
+        )
+        #expect(first != second)
+        let parsed = try #require(EventLinkRegistry.occurrence(fromKey: first))
+        #expect(parsed.series == "UID|riunione")
+        #expect(parsed.date == monday)
+        #expect(EventLinkRegistry.occurrence(fromKey: "EV-1")?.series == nil)
+        #expect(EventLinkRegistry.occurrence(fromKey: "occ||123")?.series == nil)
+
+        let taskA = UUID(), taskB = UUID()
+        var registry = EventLinkRegistry(defaults: defaults)
+        registry.link(event: first, to: taskA)
+        registry.link(event: second, to: taskB)
+        let reloaded = EventLinkRegistry(defaults: defaults)
+        #expect(reloaded.taskID(forEvent: first) == taskA)
+        #expect(reloaded.taskID(forEvent: second) == taskB)
+    }
+
+    /// #2 — una serie resta "dell'app" solo se la task è nata prima
+    /// dell'evento; le note si uniscono invece di essere sovrascritte.
+    @Test func calendarSeriesOwnershipAndNotesMerge() {
+        let created = Date(timeIntervalSince1970: 1_790_000_000)
+        #expect(CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: created.addingTimeInterval(5)
+        ))
+        // Import del codice vecchio: task nata dopo l'evento di sistema.
+        #expect(!CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: created.addingTimeInterval(-86_400)
+        ))
+        #expect(!CalendarSyncService.isAppOwnedSeries(
+            taskSource: .imported, taskCreatedAt: created, eventCreatedAt: nil
+        ))
+        #expect(CalendarSyncService.isAppOwnedSeries(
+            taskSource: .capture, taskCreatedAt: created, eventCreatedAt: nil
+        ))
+
+        #expect(CalendarSyncService.mergedNotes(local: "Portare il contratto", remote: nil) == "Portare il contratto")
+        #expect(CalendarSyncService.mergedNotes(local: "", remote: "Sala B") == "Sala B")
+        #expect(CalendarSyncService.mergedNotes(
+            local: "Portare il contratto\n\nSala B", remote: "Sala B"
+        ) == "Portare il contratto\n\nSala B")
+        #expect(CalendarSyncService.mergedNotes(local: "Sala B", remote: "Sala B, 2° piano") == "Sala B, 2° piano")
+        #expect(CalendarSyncService.mergedNotes(
+            local: "Portare il contratto", remote: "Sala B"
+        ) == "Portare il contratto\n\nSala B")
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext
