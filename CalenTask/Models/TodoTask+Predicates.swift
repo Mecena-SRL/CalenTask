@@ -129,15 +129,17 @@ extension TodoTask {
     /// Aperte senza date ("Da pianificare" nel calendario).
     static func unscheduledPredicate(workspaceID: UUID?) -> Predicate<TodoTask> {
         let doneRaw = TaskStatus.done.rawValue
+        // `nil` tipizzato: tre `== nil` letterali superano il type-checker.
+        let none: Date? = nil
         guard let workspaceID else {
             return #Predicate<TodoTask> { task in
-                task.deletedAt == nil && task.statusRaw != doneRaw && !task.isTemplate
-                    && task.startAt == nil && task.dueAt == nil
+                task.deletedAt == none && task.startAt == none && task.dueAt == none
+                    && task.statusRaw != doneRaw && !task.isTemplate
             }
         }
         return #Predicate<TodoTask> { task in
-            task.workspaceID == workspaceID && task.deletedAt == nil && task.statusRaw != doneRaw
-                && !task.isTemplate && task.startAt == nil && task.dueAt == nil
+            task.workspaceID == workspaceID && task.deletedAt == none && task.startAt == none
+                && task.dueAt == none && task.statusRaw != doneRaw && !task.isTemplate
         }
     }
 
