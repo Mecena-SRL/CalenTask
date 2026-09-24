@@ -37,6 +37,8 @@ struct WeekGridView: View {
 
     /// Anteprima del blocco mentre si trascina per creare (con il giorno scelto).
     @State private var draftRange: (day: Date, start: CGFloat, end: CGFloat)?
+    /// Fascia "tutto il giorno" aperta per intero (altrimenti 3 corsie + "+N").
+    @State private var allDayExpanded = false
     private var hourHeight: CGFloat {
         min(64, max(34, viewportHeight / 14))
     }
@@ -144,44 +146,114 @@ struct WeekGridView: View {
         .help("Apri \(day.appFormatted(.dateTime.weekday(.wide).day().month()))")
     }
 
-    /// Scadenze e all-day della settimana, compatte sopra la griglia.
-    /// Le chip sono trascinabili su un orario della griglia (come nel Giorno).
+    // MARK: Tutto il giorno
+
+    private let allDayLaneHeight: CGFloat = 18
+    private let allDayLaneGap: CGFloat = 2
+    private let allDayCollapsedLanes = 3
+
+    /// La fascia "tutto il giorno": eventi su più giorni come barre continue,
+    /// eventi di un giorno intero e scadenze, disposti in corsie
+    /// (`CalendarWeekLayout`, come il Mese). Chiusa mostra 3 corsie e "+N";
+    /// si apre col pulsante a sinistra. Trascinare un elemento su un altro
+    /// giorno lo ri-data (ora preservata); sulla griglia gli dà un orario.
     @ViewBuilder
     private func allDayRow(days: [Date], data: CalendarTaskIndex) -> some View {
-        if days.contains(where: { !data.allDayTasks(on: $0).isEmpty }) {
+        let tasks = CalendarWeekLayout.tasks(in: days, from: data.allDayByDay, calendar: calendar)
+        let layout = CalendarWeekLayout(
+            columns: days.count,
+            segments: CalendarWeekLayout.segments(for: tasks, days: days, calendar: calendar)
+                .filter { $0.kind != .timed }
+        )
+        if layout.laneCount > 0 {
+            let canExpand = layout.laneCount > allDayCollapsedLanes
+            let maxLanes = allDayExpanded ? layout.laneCount : allDayCollapsedLanes
+            let lanesShown = min(layout.laneCount, maxLanes)
+            let visible = layout.visiblePlacements(maxLanes: maxLanes)
+            let hidden = layout.hiddenCounts(maxLanes: maxLanes)
+            let taskByID = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let laneStep = allDayLaneHeight + allDayLaneGap
+
             HStack(alignment: .top, spacing: 0) {
-                Text("∞")
-                    .font(.dsCaption)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: labelWidth)
+                Group {
+                    if canExpand {
+                        Button {
+                            withAnimation(.dsSoft) { allDayExpanded.toggle() }
+                        } label: {
+                            Image(systemName: allDayExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: labelWidth, height: allDayLaneHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help(allDayExpanded ? "Riduci" : "Mostra tutto")
+                    } else {
+                        Image(systemName: "sun.max")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: labelWidth, height: allDayLaneHeight)
+                            .help("Tutto il giorno")
+                    }
+                }
+
                 ZStack(alignment: .topLeading) {
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(days, id: \.self) { day in
-                            // Le chip si dimensionano sul contenuto (niente larghezza
-                            // fissa sproporzionata), allineate a sinistra nel giorno.
-                            VStack(alignment: .leading, spacing: 2) {
-                                ForEach(data.allDayTasks(on: day).prefix(3), id: \.id) { task in
-                                    Text(task.title)
-                                        .font(.system(size: 9, weight: .medium))
-                                        .lineLimit(1)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 2)
-                                        .background(itemTint(task).opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
-                                        .foregroundStyle(itemTint(task))
-                                        .draggable(task.id.uuidString)
-                                        .taskContextMenu(task)
+                    GeometryReader { geo in
+                        let columnWidth = geo.size.width / CGFloat(max(days.count, 1))
+                        ZStack(alignment: .topLeading) {
+                            HStack(spacing: 0) {
+                                ForEach(days, id: \.self) { day in
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .dropDestination(for: String.self) { items, _ in
+                                            guard let first = items.first else { return false }
+                                            var moved = false
+                                            withAnimation(.dsSoft) {
+                                                moved = CalendarActions.reschedule(
+                                                    taskID: first, to: day, in: modelContext, calendar: calendar
+                                                )
+                                            }
+                                            return moved
+                                        }
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 1)
+                            ForEach(visible) { placement in
+                                if let task = taskByID[placement.segment.id] {
+                                    CalendarEventBar(task: task, segment: placement.segment)
+                                        .frame(width: max(0, CGFloat(placement.segment.length) * columnWidth - 4),
+                                               height: allDayLaneHeight)
+                                        .offset(x: CGFloat(placement.segment.start) * columnWidth + 2,
+                                                y: CGFloat(placement.lane) * laneStep)
+                                        .transition(.opacity)
+                                }
+                            }
+                            ForEach(Array(hidden.enumerated()), id: \.offset) { index, count in
+                                if count > 0 {
+                                    Button {
+                                        withAnimation(.dsSoft) { allDayExpanded = true }
+                                    } label: {
+                                        Text("+\(count)")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 6)
+                                            .frame(width: max(0, columnWidth - 4), height: allDayLaneHeight,
+                                                   alignment: .leading)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .offset(x: CGFloat(index) * columnWidth + 2,
+                                            y: CGFloat(maxLanes - 1) * laneStep)
+                                }
+                            }
                         }
                     }
+                    .frame(height: CGFloat(lanesShown) * laneStep)
                     .id(periodID)
                     .transition(.push(from: transitionEdge))
                 }
                 .clipped()
             }
-            .padding(.bottom, DS.xs)
+            .padding(.vertical, DS.xs)
         }
     }
 
@@ -318,29 +390,7 @@ struct WeekGridView: View {
             bySettingHour: startM / 60, minute: startM % 60, second: 0, of: day
         ) else { return }
         let end = start.addingTimeInterval(TimeInterval((endM - startM) * 60))
-        do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
-            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
-            let task = TodoTask(
-                workspaceID: target.id,
-                title: "Nuova attività",
-                kind: .task,
-                startAt: start,
-                endAt: end,
-                createdByID: me.id
-            )
-            modelContext.insert(task)
-            try? modelContext.save()
-            NotificationService.shared.sync(task: task)
-            // "poi aggiungo i dati": apri subito l'editor.
-            #if os(macOS)
-            router.inspect(taskID: task.id)
-            #else
-            router.open(taskID: task.id)
-            #endif
-        } catch {
-            reportFailure("create timed task (week): \(error)")
-        }
+        CalendarActions.createTask(start: start, end: end, in: modelContext, router: router)
     }
 
     private func handleDrop(_ items: [String], on day: Date, at location: CGPoint) -> Bool {
@@ -373,10 +423,5 @@ struct WeekGridView: View {
         (m / snapMinutes) * snapMinutes
     }
 
-    private func itemTint(_ task: TodoTask) -> Color {
-        task.accentTagColorHex.map { Color(hex: $0) }
-            ?? task.project.map { Color(hex: $0.colorHex) }
-            ?? .accentColor
-    }
 
 }

@@ -72,6 +72,8 @@ struct CalendarScreen: View {
     /// E10 — heatmap densità nel mese (in Anno è sempre attiva).
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
     @AppStorage("calendarShowsWeekNumbers") private var showsWeekNumbers = true
+    @AppStorage(CalendarWeekStyle.storageKey) private var weekStyleRaw = CalendarWeekStyle.grid.rawValue
+    @AppStorage(CalendarMonthStyle.storageKey) private var monthStyleRaw = CalendarMonthStyle.grid.rawValue
     /// S5 — vista N-giorni (la "settimana" può essere 2–9 giorni).
     @AppStorage("calendarWeekDayCount") private var weekDayCount = 7
     /// F30 — il trimestre si può togliere dalla barra delle viste.
@@ -146,6 +148,21 @@ struct CalendarScreen: View {
     }
     private var visibleWeekStart: Date {
         visibleWeekDayCount == 7 ? weekStart : selectedDay.startOfDay
+    }
+
+    private var weekStyle: Binding<CalendarWeekStyle> {
+        Binding(get: { CalendarWeekStyle(rawValue: weekStyleRaw) ?? .grid },
+                set: { weekStyleRaw = $0.rawValue })
+    }
+
+    private var monthStyle: Binding<CalendarMonthStyle> {
+        Binding(get: { CalendarMonthStyle(rawValue: monthStyleRaw) ?? .grid },
+                set: { monthStyleRaw = $0.rawValue })
+    }
+
+    private var dayStyle: Binding<CalendarDayStyle> {
+        Binding(get: { CalendarDayStyle(rawValue: dayModeRaw) ?? .agenda },
+                set: { dayModeRaw = $0.rawValue })
     }
 
     private var workHours: Range<Int>? {
@@ -319,6 +336,14 @@ struct CalendarScreen: View {
                 }
                 .clipped()
                 Spacer()
+                if mode == .week {
+                    CalendarStyleToggle(selection: weekStyle, compact: true)
+                        .padding(.trailing, DS.s)
+                }
+                if mode == .month {
+                    CalendarStyleToggle(selection: monthStyle, compact: true)
+                        .padding(.trailing, DS.s)
+                }
                 if mode == .week, showsAdvancedViews {
                     // S5 — la "settimana" è elastica: 2–9 giorni.
                     Menu {
@@ -342,7 +367,7 @@ struct CalendarScreen: View {
                     .fixedSize()
                     .padding(.trailing, DS.s)
                 }
-                if mode == .month, showsSummary {
+                if mode == .month, showsSummary, monthStyle.wrappedValue == .grid {
                     // E10 — toggle heatmap densità (Timepage).
                     Button {
                         withAnimation(.dsQuick) { monthHeatmap.toggle() }
@@ -550,7 +575,7 @@ struct CalendarScreen: View {
                 .clipped()
             }
             HStack(spacing: DS.m) {
-                DayModeToggle(selection: $dayModeRaw)
+                CalendarStyleToggle(selection: dayStyle)
                 Spacer(minLength: 0)
                 if isDayGridLike {
                     densityControl
@@ -648,24 +673,46 @@ struct CalendarScreen: View {
 
     // MARK: Settimana
 
+    @ViewBuilder
     private func weekContent(_ data: CalendarTaskIndex) -> some View {
-        WeekGridView(
-            // 7 giorni = settimana ancorata al lunedì; N giorni = dal selezionato.
-            weekStart: visibleWeekStart,
-            dayCount: visibleWeekDayCount,
-            data: data,
-            people: people,
-            showsWeather: showsWeather,
-            workHours: workHours,
-            transitionEdge: navigationEdge,
-            scrollToNowToken: scrollToNowToken
-        ) { day in
-            withAnimation(.dsQuick) {
-                selectedDay = day.startOfDay
-                modeRaw = CalendarViewMode.day.rawValue
+        switch weekStyle.wrappedValue {
+        case .grid:
+            WeekGridView(
+                // 7 giorni = settimana ancorata al lunedì; N giorni = dal selezionato.
+                weekStart: visibleWeekStart,
+                dayCount: visibleWeekDayCount,
+                data: data,
+                people: people,
+                showsWeather: showsWeather,
+                workHours: workHours,
+                transitionEdge: navigationEdge,
+                scrollToNowToken: scrollToNowToken
+            ) { day in
+                openDay(day)
             }
+            .padding([.horizontal, .bottom], DS.l)
+            .transition(.opacity)
+        case .columns:
+            WeekColumnsView(
+                weekStart: visibleWeekStart,
+                dayCount: visibleWeekDayCount,
+                data: data,
+                workStartHour: workHours?.lowerBound ?? 9,
+                transitionEdge: navigationEdge
+            ) { day in
+                openDay(day)
+            }
+            .padding([.horizontal, .bottom], DS.l)
+            .transition(.opacity)
         }
-        .padding([.horizontal, .bottom], DS.l)
+    }
+
+    /// Dall'intestazione di un giorno (Settimana) alla vista Giorno.
+    private func openDay(_ day: Date) {
+        withAnimation(.dsQuick) {
+            selectedDay = day.startOfDay
+            modeRaw = CalendarViewMode.day.rawValue
+        }
     }
 
     // MARK: Mese
@@ -676,7 +723,15 @@ struct CalendarScreen: View {
     private func monthContent(_ data: CalendarTaskIndex) -> some View {
         let monthStart = CalendarMath.startOfMonth(for: selectedDay, calendar: calendar)
         return VStack(spacing: 0) {
-            if showsRichMonth && monthWidth >= 860 {
+            if monthStyle.wrappedValue == .list {
+                ZStack(alignment: .top) {
+                    MonthListView(month: monthStart, selectedDay: selectedDayBinding,
+                                  tasksByDay: data.tasksByDay)
+                        .id(monthStart)
+                        .transition(.push(from: navigationEdge))
+                }
+                .clipped()
+            } else if showsRichMonth && monthWidth >= 860 {
                 HStack(alignment: .top, spacing: DS.l) {
                     monthGrid(data, month: monthStart, fillsHeight: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

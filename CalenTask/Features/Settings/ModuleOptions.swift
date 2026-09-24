@@ -31,6 +31,8 @@ private struct CalendarModuleOptions: View {
     @AppStorage("calendarShowsQuarter") private var showsQuarter = true
     @AppStorage("calendarMonthHeatmap") private var monthHeatmap = false
     @AppStorage("calendarShowsWeekNumbers") private var showsWeekNumbers = true
+    @AppStorage(CalendarWeekStyle.storageKey) private var weekStyleRaw = CalendarWeekStyle.grid.rawValue
+    @AppStorage(CalendarMonthStyle.storageKey) private var monthStyleRaw = CalendarMonthStyle.grid.rawValue
     @AppStorage(CalendarWorkHours.startKey) private var workStart = CalendarWorkHours.defaultStart
     @AppStorage(CalendarWorkHours.endKey) private var workEnd = CalendarWorkHours.defaultEnd
 
@@ -53,11 +55,27 @@ private struct CalendarModuleOptions: View {
                 DSFieldRow(label: "Vista predefinita", systemImage: "calendar", tint: .red) { EmptyView() }
             }
             Picker(selection: $dayModeRaw) {
-                Text("Agenda").tag("agenda")
-                Text("Griglia oraria").tag("grid")
+                ForEach(CalendarDayStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
             } label: {
-                DSFieldRow(label: "Dettaglio giorno", systemImage: "calendar.day.timeline.left",
+                DSFieldRow(label: "Giorno", systemImage: "calendar.day.timeline.left",
                            tint: .blue) { EmptyView() }
+            }
+            Picker(selection: $weekStyleRaw) {
+                ForEach(CalendarWeekStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
+            } label: {
+                DSFieldRow(label: "Settimana", systemImage: "rectangle.split.3x1",
+                           tint: .teal) { EmptyView() }
+            }
+            Picker(selection: $monthStyleRaw) {
+                ForEach(CalendarMonthStyle.allCases) { style in
+                    Label(style.title, systemImage: style.systemImage).tag(style.rawValue)
+                }
+            } label: {
+                DSFieldRow(label: "Mese", systemImage: "calendar", tint: .red) { EmptyView() }
             }
             if advancedViews {
                 Picker(selection: $weekDayCount) {

@@ -40,6 +40,23 @@ struct CalendarMathTests {
         #expect(!index.tasks(on: date(2026, 6, 2)).contains { $0 === meeting })
     }
 
+    /// Fase 3 — un evento con orario su più giorni va nella fascia "tutto il
+    /// giorno" (barra continua), non nella griglia oraria.
+    @Test func multiDayTimedEventsLeaveTheHourGrid() {
+        let cal = italianCalendar
+        let monday = date(2026, 6, 1)
+        let trip = TodoTask(workspaceID: UUID(), title: "Trasferta", kind: .event,
+                            startAt: monday.addingTimeInterval(9 * 3600),
+                            endAt: monday.addingTimeInterval(2 * 86_400 + 18 * 3600),
+                            createdByID: UUID())
+        let index = CalendarTaskIndex(tasks: [trip], calendar: cal)
+        #expect(index.timedTasks(on: monday).isEmpty)
+        for offset in 0..<3 {
+            let day = cal.date(byAdding: .day, value: offset, to: monday)!
+            #expect(index.allDayTasks(on: day).filter { $0 === trip }.count == 1)
+        }
+    }
+
     @Test func gridIsAlways6x7() {
         let calendar = italianCalendar
         for month in 1...12 {
@@ -171,5 +188,18 @@ struct CalendarWeekLayoutTests {
         #expect(byID[a]?.start == 0 && byID[a]?.end == 2)
         #expect(byID[b]?.start == 5 && byID[b]?.end == 6)
         #expect(byID[c] == nil)
+    }
+}
+
+/// Fase 3: i tipi di vista restano compatibili con le preferenze salvate.
+@MainActor
+struct CalendarStyleTests {
+    @Test func stylesMatchStoredRawValues() {
+        #expect(CalendarDayStyle(rawValue: "agenda") == .agenda)
+        #expect(CalendarDayStyle(rawValue: "grid") == .grid)
+        #expect(CalendarDayStyle.storageKey == "calendarDayMode")
+        #expect(CalendarWeekStyle.allCases == [.grid, .columns])
+        #expect(CalendarMonthStyle.allCases == [.grid, .list])
+        #expect(CalendarWeekStyle(rawValue: "sconosciuto") == nil)
     }
 }

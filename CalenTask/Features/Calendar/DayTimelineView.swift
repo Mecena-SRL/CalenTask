@@ -174,29 +174,7 @@ struct DayTimelineView: View {
             bySettingHour: startM / 60, minute: startM % 60, second: 0, of: day
         ) else { return }
         let end = start.addingTimeInterval(TimeInterval((endM - startM) * 60))
-        do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
-            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
-            let task = TodoTask(
-                workspaceID: target.id,
-                title: "Nuova attività",
-                kind: .task,
-                startAt: start,
-                endAt: end,
-                createdByID: me.id
-            )
-            modelContext.insert(task)
-            try? modelContext.save()
-            NotificationService.shared.sync(task: task)
-            // "poi aggiungo i dati": apri subito l'editor.
-            #if os(macOS)
-            router.inspect(taskID: task.id)
-            #else
-            router.open(taskID: task.id)
-            #endif
-        } catch {
-            reportFailure("create timed task: \(error)")
-        }
+        CalendarActions.createTask(start: start, end: end, in: modelContext, router: router)
     }
 
     private func minutes(at y: CGFloat) -> Int {

@@ -116,41 +116,6 @@ struct DayHeaderView: View {
     }
 }
 
-// MARK: - Selettore Agenda / Griglia
-
-/// Toggle a capsula per la sotto-modalità del giorno: due segmenti con icona
-/// e testo, quello attivo riempito d'accento. Più curato del segmented nudo.
-struct DayModeToggle: View {
-    @Binding var selection: String   // "agenda" / "grid"
-
-    var body: some View {
-        HStack(spacing: 2) {
-            segment("Agenda", icon: "list.bullet", tag: "agenda")
-            segment("Griglia", icon: "calendar.day.timeline.left", tag: "grid")
-        }
-        .padding(2)
-        .background(.quaternary.opacity(0.4), in: Capsule())
-    }
-
-    private func segment(_ title: String, icon: String, tag: String) -> some View {
-        let isOn = selection == tag
-        return Button {
-            withAnimation(.dsQuick) { selection = tag }
-        } label: {
-            Label(title, systemImage: icon)
-                .font(.dsCaption.weight(.medium))
-                .padding(.horizontal, DS.m)
-                .padding(.vertical, DS.xs + 1)
-                .background {
-                    if isOn { Capsule().fill(Color.accentColor) }
-                }
-                .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Meteo del giorno
 
 /// Il meteo del giorno in uno spazio proprio: simbolo multicolor + condizione
