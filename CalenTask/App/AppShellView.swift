@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import Combine
+import CoreData
 
 /// La shell adattiva (D70): UNA grammatica di navigazione, tre tagli.
 /// Width regular (Mac + iPad) → split view con la sidebar ricca;
@@ -141,6 +143,19 @@ struct AppShellView: View {
             if phase == .active {
                 NotificationService.shared.resyncAll(in: modelContext)
             }
+        }
+        // #29 — modifiche arrivate da iCloud mentre l'app è aperta: notifiche,
+        // digest e widget si riallineano subito (prima solo all'avvio e al
+        // ritorno in primo piano). A raffica finita: una sync ne manda tante.
+        .onReceive(
+            NotificationCenter.default
+                .publisher(for: .NSPersistentStoreRemoteChange)
+                .debounce(for: .seconds(2), scheduler: RunLoop.main)
+        ) { _ in
+            guard scenePhase == .active else { return }
+            NotificationService.shared.resyncAll(in: modelContext)
+            scheduleDigest()
+            WidgetBridge.refresh(in: modelContext)
         }
     }
 
