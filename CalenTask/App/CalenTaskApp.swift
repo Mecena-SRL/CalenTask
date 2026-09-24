@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import SwiftData
 #if os(macOS)
 import Security
