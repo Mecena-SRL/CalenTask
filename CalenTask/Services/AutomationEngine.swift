@@ -46,6 +46,12 @@ enum AutomationEngine {
         if let titleTemplate = rule.createTaskTitle,
            !titleTemplate.trimmingCharacters(in: .whitespaces).isEmpty {
             let title = titleTemplate.replacingOccurrences(of: "{task}", with: task.title)
+            // #10 — idempotenza: completa → riapri → completa (o avanti e
+            // indietro nella pipeline) non crea un secondo follow-up uguale
+            // finché il primo è ancora aperto.
+            guard !openFollowUpExists(title: title, project: task.project, in: context) else {
+                return applyAssignmentAndNotice(rule, for: task, in: context)
+            }
             let followUp = TodoTask(
                 workspaceID: task.workspaceID,
                 title: title,
@@ -66,9 +72,15 @@ enum AutomationEngine {
         }
 
         // 2. Re-assign the triggering task.
-        if let assignee = rule.assignToID {
+        applyAssignmentAndNotice(rule, for: task, in: context)
+    }
+
+    private static func applyAssignmentAndNotice(
+        _ rule: AutomationRule, for task: TodoTask, in context: ModelContext
+    ) {
+        if let assignee = rule.assignToID, task.assigneeID != assignee {
             task.assigneeID = assignee
-            task.updatedAt = .now
+            task.touch()
         }
 
         // 3. Notify a person (local notification on this device, v1).
@@ -81,5 +93,18 @@ enum AutomationEngine {
                 body: "\(person?.name ?? "Team"): «\(task.title)»"
             )
         }
+    }
+
+    private static func openFollowUpExists(
+        title: String, project: Project?, in context: ModelContext
+    ) -> Bool {
+        let automationRaw = TaskSource.automation.rawValue
+        let doneRaw = TaskStatus.done.rawValue
+        let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate {
+            $0.title == title && $0.sourceRaw == automationRaw
+                && $0.deletedAt == nil && $0.statusRaw != doneRaw
+        })
+        let projectID = project?.id
+        return ((try? context.fetch(descriptor)) ?? []).contains { $0.project?.id == projectID }
     }
 }

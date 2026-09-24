@@ -268,6 +268,13 @@ struct DomainModelTests {
             try context.fetch(FetchDescriptor<TodoTask>()).first { $0.title.hasPrefix("Preparare export") }
         )
         #expect(created.title == "Preparare export — Montaggio v3")
+
+        // #10 — fuori e di nuovo dentro lo stadio: nessun follow-up doppio.
+        task.move(toStage: nil)
+        task.move(toStage: approved)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<TodoTask>())
+            .filter { $0.title.hasPrefix("Preparare export") }.count == 1)
         #expect(created.assigneeID == me.id)
         #expect(created.project?.id == project.id)
         let expectedDue = Calendar.current.date(byAdding: .day, value: 2, to: .now.startOfDay)
