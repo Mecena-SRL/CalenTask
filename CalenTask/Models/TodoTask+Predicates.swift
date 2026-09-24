@@ -59,15 +59,21 @@ extension TodoTask {
         ]
     }
 
+    // Ogni predicato ha due varianti (tutti gli spazi / uno) invece di
+    // `anyWorkspace || …`: la disgiunzione fa esplodere il type-checker.
+
     /// Inizio in [start, end).
     static func calendarStartPredicate(from start: Date, to end: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
         let past = Date.distantPast
         let future = Date.distantFuture
-        let anyWorkspace = workspaceID == nil
-        let workspace = workspaceID ?? UUID()
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && !task.isTemplate
+                    && (task.startAt ?? past) >= start && (task.startAt ?? future) < end
+            }
+        }
         return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && !task.isTemplate
-                && (anyWorkspace || task.workspaceID == workspace)
+            task.workspaceID == workspaceID && task.deletedAt == nil && !task.isTemplate
                 && (task.startAt ?? past) >= start && (task.startAt ?? future) < end
         }
     }
@@ -76,11 +82,14 @@ extension TodoTask {
     static func calendarOngoingPredicate(from start: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
         let past = Date.distantPast
         let future = Date.distantFuture
-        let anyWorkspace = workspaceID == nil
-        let workspace = workspaceID ?? UUID()
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && !task.isTemplate
+                    && (task.startAt ?? future) < start && (task.endAt ?? past) >= start
+            }
+        }
         return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && !task.isTemplate
-                && (anyWorkspace || task.workspaceID == workspace)
+            task.workspaceID == workspaceID && task.deletedAt == nil && !task.isTemplate
                 && (task.startAt ?? future) < start && (task.endAt ?? past) >= start
         }
     }
@@ -89,11 +98,14 @@ extension TodoTask {
     static func calendarDuePredicate(from start: Date, to end: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
         let past = Date.distantPast
         let future = Date.distantFuture
-        let anyWorkspace = workspaceID == nil
-        let workspace = workspaceID ?? UUID()
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && !task.isTemplate
+                    && (task.dueAt ?? past) >= start && (task.dueAt ?? future) < end
+            }
+        }
         return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && !task.isTemplate
-                && (anyWorkspace || task.workspaceID == workspace)
+            task.workspaceID == workspaceID && task.deletedAt == nil && !task.isTemplate
                 && (task.dueAt ?? past) >= start && (task.dueAt ?? future) < end
         }
     }
@@ -102,11 +114,14 @@ extension TodoTask {
     static func calendarSpanningPredicate(from start: Date, to end: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
         let past = Date.distantPast
         let future = Date.distantFuture
-        let anyWorkspace = workspaceID == nil
-        let workspace = workspaceID ?? UUID()
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && !task.isTemplate
+                    && (task.startAt ?? future) < start && (task.dueAt ?? past) >= end
+            }
+        }
         return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && !task.isTemplate
-                && (anyWorkspace || task.workspaceID == workspace)
+            task.workspaceID == workspaceID && task.deletedAt == nil && !task.isTemplate
                 && (task.startAt ?? future) < start && (task.dueAt ?? past) >= end
         }
     }
@@ -114,12 +129,15 @@ extension TodoTask {
     /// Aperte senza date ("Da pianificare" nel calendario).
     static func unscheduledPredicate(workspaceID: UUID?) -> Predicate<TodoTask> {
         let doneRaw = TaskStatus.done.rawValue
-        let anyWorkspace = workspaceID == nil
-        let workspace = workspaceID ?? UUID()
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && task.statusRaw != doneRaw && !task.isTemplate
+                    && task.startAt == nil && task.dueAt == nil
+            }
+        }
         return #Predicate<TodoTask> { task in
-            task.deletedAt == nil && !task.isTemplate && task.statusRaw != doneRaw
-                && task.startAt == nil && task.dueAt == nil
-                && (anyWorkspace || task.workspaceID == workspace)
+            task.workspaceID == workspaceID && task.deletedAt == nil && task.statusRaw != doneRaw
+                && !task.isTemplate && task.startAt == nil && task.dueAt == nil
         }
     }
 
