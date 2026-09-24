@@ -43,6 +43,30 @@ struct DomainModelTests {
         #expect(try context.fetchCount(FetchDescriptor<Membership>()) == 2)
     }
 
+    /// #9 — il "me" di iPhone ("Io") e quello del Mac (nome completo) sono la
+    /// stessa persona: dopo il merge iCloud ne resta uno, mai un doppione eliminato.
+    @Test func seedProfilesFromDifferentDevicesMergeRegardlessOfName() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let phone = UserProfile(name: "Io", email: "", isLocalSeed: true)
+        phone.createdAt = Date.now.addingTimeInterval(-3600)
+        let mac = UserProfile(name: "Mario Rossi", email: "", isLocalSeed: true)
+        let teammate = UserProfile(name: "Io", email: "")   // aggiunto a mano: mai fuso
+        context.insert(phone)
+        context.insert(mac)
+        context.insert(teammate)
+        try context.save()
+        UserDefaults.standard.set(mac.id.uuidString, forKey: SeedService.userDefaultsKey)
+
+        let (_, me) = try SeedService.ensureSeed(in: context)
+
+        #expect(me.id == phone.id)
+        #expect(me.deletedAt == nil)
+        #expect(me.name == "Mario Rossi")
+        #expect(mac.deletedAt != nil)
+        #expect(teammate.deletedAt == nil)
+    }
+
     @Test func subtaskCascadeDelete() throws {
         let container = try makeContainer()
         let context = container.mainContext
