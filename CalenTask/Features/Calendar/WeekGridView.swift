@@ -290,7 +290,7 @@ struct WeekGridView: View {
             router.open(taskID: task.id)
             #endif
         } catch {
-            assertionFailure("create timed task (week): \(error)")
+            reportFailure("create timed task (week): \(error)")
         }
     }
 

@@ -219,7 +219,7 @@ struct ContactEditorView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Contact save failed: \(error)")
+            reportFailure("Contact save failed: \(error)")
         }
     }
 }

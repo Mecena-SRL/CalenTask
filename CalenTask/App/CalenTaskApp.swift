@@ -17,6 +17,9 @@ import Security
 /// quando si sceglie davvero la configurazione CloudKit.
 enum StoreMode {
     static fileprivate(set) var isCloudKit = false
+    /// #17 — perché CloudKit non si è aperto (entitlement presente ma
+    /// container in errore): mostrato in Impostazioni › Account.
+    static fileprivate(set) var cloudKitFailure: String?
 }
 
 private func processHasCloudKitEntitlement() -> Bool {
@@ -73,10 +76,11 @@ struct CalenTaskApp: App {
             } catch {
                 // Fallback locale: l'app deve aprirsi anche senza iCloud
                 // (utente non loggato, container danneggiato, ecc.).
-                print("⚠️ CloudKit non disponibile, store locale: \(error)")
+                StoreMode.cloudKitFailure = error.localizedDescription
+                Log.store.error("CloudKit non disponibile, store locale: \(String(describing: error), privacy: .public)")
             }
         } else {
-            print("ℹ️ Processo senza entitlement iCloud: store locale.")
+            Log.store.info("Processo senza entitlement iCloud: store locale.")
         }
 
         let localConfiguration = ModelConfiguration(

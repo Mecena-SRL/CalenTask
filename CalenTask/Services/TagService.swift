@@ -42,7 +42,7 @@ enum TagService {
                 task.tags = resolved
             }
         } catch {
-            assertionFailure("Tag sync failed: \(error)")
+            reportFailure("Tag sync failed: \(error)")
         }
     }
 }

@@ -109,7 +109,7 @@ struct NewProjectSheet: View {
             )
             dismiss()
         } catch {
-            assertionFailure("Project creation failed: \(error)")
+            reportFailure("Project creation failed: \(error)")
         }
     }
 }

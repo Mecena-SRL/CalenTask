@@ -213,7 +213,7 @@ struct SmartListEditorView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Smart list save failed: \(error)")
+            reportFailure("Smart list save failed: \(error)")
         }
     }
 }

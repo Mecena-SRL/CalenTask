@@ -506,7 +506,7 @@ struct QuickModeView: View {
             capturePriority = .normal
             isCaptureFocused = true
         } catch {
-            assertionFailure("Quick capture failed: \(error)")
+            reportFailure("Quick capture failed: \(error)")
         }
     }
 }

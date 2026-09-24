@@ -78,7 +78,7 @@ struct BatchTaskEntryView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Batch entry failed: \(error)")
+            reportFailure("Batch entry failed: \(error)")
         }
     }
 }

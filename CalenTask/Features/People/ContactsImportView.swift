@@ -145,7 +145,7 @@ struct ContactsImportView: View {
             )
             dismiss()
         } catch {
-            assertionFailure("Contacts import failed: \(error)")
+            reportFailure("Contacts import failed: \(error)")
         }
     }
 }

@@ -118,7 +118,7 @@ struct WorkspaceEditorView: View {
             }
             dismiss()
         } catch {
-            assertionFailure("Workspace save failed: \(error)")
+            reportFailure("Workspace save failed: \(error)")
         }
     }
 }

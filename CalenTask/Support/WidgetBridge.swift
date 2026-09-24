@@ -48,9 +48,7 @@ enum WidgetBridge {
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
             // Never let widget plumbing break the app.
-            #if DEBUG
-            print("WidgetBridge refresh failed: \(error)")
-            #endif
+            Log.app.error("WidgetBridge refresh failed: \(String(describing: error), privacy: .public)")
         }
     }
 

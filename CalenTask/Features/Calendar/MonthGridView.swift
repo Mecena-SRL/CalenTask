@@ -308,7 +308,7 @@ struct MonthGridView: View {
             router.open(taskID: task.id)
             #endif
         } catch {
-            assertionFailure("create month task: \(error)")
+            reportFailure("create month task: \(error)")
         }
     }
 

@@ -1130,7 +1130,7 @@ struct CalendarScreen: View {
             selectedDay = slot.startOfDay
             router.open(taskID: event.id)   // dettaglio subito, per dargli un nome
         } catch {
-            assertionFailure("Slot creation failed: \(error)")
+            reportFailure("Slot creation failed: \(error)")
         }
     }
 
@@ -1188,7 +1188,7 @@ struct CalendarScreen: View {
                 in: modelContext, workspaceID: workspace.id, createdBy: me.id
             )
         } catch {
-            assertionFailure("Sync seed failed: \(error)")
+            reportFailure("Sync seed failed: \(error)")
         }
     }
 

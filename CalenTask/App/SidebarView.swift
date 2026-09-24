@@ -393,8 +393,9 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(currentUserName)
                     .font(.dsCaption.weight(.semibold))
-                Text(StoreMode.isCloudKit
-                     ? "iCloud attivo" : "Solo questo dispositivo")
+                Text(StoreMode.isCloudKit ? "iCloud attivo"
+                     : StoreMode.cloudKitFailure != nil ? "iCloud non disponibile ⚠️"
+                     : "Solo questo dispositivo")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }

@@ -335,7 +335,7 @@ struct TaskComposerView: View {
             NotificationService.shared.sync(task: task)
             dismiss()
         } catch {
-            assertionFailure("Composer save failed: \(error)")
+            reportFailure("Composer save failed: \(error)")
         }
     }
 }
