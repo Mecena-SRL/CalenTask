@@ -230,6 +230,7 @@ struct DomainModelTests {
 
         for expected in [date(2, 28), date(3, 31), date(4, 30), date(5, 31)] {
             current.toggleDone()
+            try context.save()
             let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
             let next = try #require(open.first { $0.title == "Fattura fine mese" })
             #expect(next.dueAt == expected)
