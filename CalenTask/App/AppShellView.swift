@@ -20,18 +20,19 @@ struct AppShellView: View {
     /// First-run (S7/D68): il benvenuto si mostra UNA volta.
     @AppStorage("didShowWelcome") private var didShowWelcome = false
     @State private var showsWelcome = false
-    /// Larghezza della finestra: sotto la soglia inspector il dettaglio
-    /// attività diventa un popup modale (vedi showTaskPopup).
-    @State private var windowWidth: CGFloat = 0
+    /// Cosa sta nella finestra (colonna attività, pannello Oggi): misurato
+    /// QUI, sulla finestra intera, e applicato fuori dal layout — vedi
+    /// `updateWidthClass`.
+    @State private var widthClass = ShellWidthClass()
 
     var body: some View {
         @Bindable var router = router
         Group {
             #if os(macOS)
-            ShellSplitView()
+            ShellSplitView(widthClass: widthClass)
             #else
             if horizontalSizeClass == .regular {
-                ShellSplitView()
+                ShellSplitView(widthClass: widthClass)
                     .overlay(alignment: .bottomTrailing) {
                         captureFloatingButton(bottomPadding: DS.l)
                     }
@@ -61,12 +62,16 @@ struct AppShellView: View {
         }
         .animation(.dsQuick, value: router.isQuickCaptureOpen)
         .animation(.dsQuick, value: showTaskPopup)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         #else
         .sheet(isPresented: $router.isQuickCaptureOpen) {
             captureSheet
         }
         #endif
+        // La finestra intera, non la split view: la sua larghezza non cambia
+        // quando l'inspector entra o esce.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            updateWidthClass(width)
+        }
         .sheet(isPresented: $router.isCommandPaletteOpen) {
             CommandPaletteView()
         }
@@ -171,6 +176,20 @@ struct AppShellView: View {
         )
     }
 
+    /// Crash 0.0.3 (EXC_BREAKPOINT in `_postWindowNeedsUpdateConstraints`):
+    /// l'inspector entrava/usciva DENTRO il passaggio di layout (es. mentre
+    /// si ridimensiona o si ingrandisce la finestra); NSSplitView rifaceva i
+    /// vincoli a ripetizione finché AppKit sollevava "more Update Constraints
+    /// in Window passes than there are views in the window". Ora la decisione
+    /// si applica al giro successivo del run loop, con isteresi.
+    private func updateWidthClass(_ width: CGFloat) {
+        guard widthClass.resolved(for: width) != widthClass else { return }
+        Task { @MainActor in
+            let next = widthClass.resolved(for: width)
+            if next != widthClass { widthClass = next }
+        }
+    }
+
     /// D67 — i numeri del digest si calcolano sul giorno in cui suonerà (8:00).
     private func scheduleDigest() {
         let calendar = Calendar.current
@@ -237,7 +256,7 @@ struct AppShellView: View {
 
     /// C'è un'attività da aprire ma manca lo spazio per la colonna destra.
     private var showTaskPopup: Bool {
-        windowWidth > 0 && windowWidth < TaskPanel.inspectorMinWidth
+        widthClass.isMeasured && !widthClass.fitsTaskInspector
             && router.taskForInspector != nil
     }
 
@@ -294,25 +313,52 @@ struct AppShellView: View {
 
 // MARK: - Regular: split view (Mac + iPad, D70)
 
+/// Cosa sta nella finestra: la colonna dettaglio attività (F14) e il
+/// pannello Oggi (D74). Con isteresi: una colonna appare a soglia piena e
+/// sparisce solo `hysteresis` punti più sotto, così la sua comparsa (che su
+/// macOS può allargare la finestra) non la rimette subito in discussione.
+struct ShellWidthClass: Equatable {
+    var isMeasured = false
+    var fitsTaskInspector = false
+    var fitsTodayPanel = false
+
+    static let hysteresis: CGFloat = 48
+
+    func resolved(for width: CGFloat) -> ShellWidthClass {
+        guard width > 0, width.isFinite else { return self }
+        func fits(_ threshold: CGFloat, isShown: Bool) -> Bool {
+            width >= (isMeasured && isShown ? threshold - Self.hysteresis : threshold)
+        }
+        return ShellWidthClass(
+            isMeasured: true,
+            fitsTaskInspector: fits(TaskPanel.inspectorMinWidth, isShown: fitsTaskInspector),
+            fitsTodayPanel: fits(TodayPanel.minimumShellWidth, isShown: fitsTodayPanel)
+        )
+    }
+}
+
 /// Sidebar ricca + detail. La destinazione del router È il detail.
 private struct ShellSplitView: View {
     @Environment(AppRouter.self) private var router
     @AppStorage(AppConfiguration.storageKey) private var configurationRaw = ""
     private var configuration: AppConfiguration { .decode(configurationRaw) }
 
+    /// Misurata da `AppShellView` sulla finestra intera (mai qui: la split
+    /// view cambia quando l'inspector entra).
+    let widthClass: ShellWidthClass
+
     /// D74 — pannello Oggi: scelta dell'utente (menu Vista / X su macOS)…
     @AppStorage(TodayPanel.storageKey) private var wantsTodayPanel = true
-    /// …ma appare solo se la finestra ha davvero spazio (27"/32").
-    @State private var shellWidth: CGFloat = 0
 
+    /// …ma appare solo se la finestra ha davvero spazio (27"/32").
     private var canShowTodayPanel: Bool {
-        configuration.isEnabled(.todayInspector) && shellWidth >= TodayPanel.minimumShellWidth
+        configuration.isEnabled(.todayInspector) && widthClass.fitsTodayPanel
     }
 
     /// Largo abbastanza da reggere il dettaglio come colonna destra. Sotto
     /// questa soglia (ma ancora regular) l'attività si apre in un popup.
     private var canShowTaskInspector: Bool {
-        shellWidth >= TaskPanel.inspectorMinWidth
+        widthClass.fitsTaskInspector
     }
 
     /// L'attività è da mostrare nell'inspector (c'è e c'è spazio).
@@ -342,7 +388,9 @@ private struct ShellSplitView: View {
     /// modale, che non comprime il contenuto come farebbe la colonna destra.
     private var taskSheetBinding: Binding<Bool> {
         Binding(
-            get: { router.taskForInspector != nil && !canShowTaskInspector },
+            get: {
+                router.taskForInspector != nil && widthClass.isMeasured && !canShowTaskInspector
+            },
             set: { isOpen in
                 if !isOpen { router.taskForInspector = nil }
             }
@@ -389,11 +437,6 @@ private struct ShellSplitView: View {
         #if os(macOS)
         .frame(minWidth: 840, minHeight: 560)
         #endif
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            shellWidth = width
-        }
     }
 
     /// Su macOS si può riaprire dal menu Vista (⌥⌘0), quindi la X ha senso;

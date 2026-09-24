@@ -864,6 +864,32 @@ struct DomainModelTests {
         #expect(TodoTask.orderedEnd(later, start: nil) == later)
     }
 
+    /// Colonne della finestra con isteresi: una colonna appare a soglia
+    /// piena e sparisce solo sotto la soglia meno l'isteresi (crash 0.0.3:
+    /// l'inspector che entrava/usciva in continuazione durante il layout).
+    @Test func shellWidthClassUsesHysteresis() {
+        let unmeasured = ShellWidthClass()
+        #expect(!unmeasured.isMeasured)
+        #expect(unmeasured.resolved(for: 0) == unmeasured)
+
+        let wide = unmeasured.resolved(for: TodayPanel.minimumShellWidth)
+        #expect(wide.isMeasured && wide.fitsTodayPanel && wide.fitsTaskInspector)
+
+        // Poco sotto la soglia: resta tutto com'è.
+        let slightlyNarrower = wide.resolved(for: TodayPanel.minimumShellWidth - 20)
+        #expect(slightlyNarrower.fitsTodayPanel)
+        // Oltre l'isteresi: il pannello Oggi esce, la colonna attività resta.
+        let narrower = wide.resolved(for: TodayPanel.minimumShellWidth - ShellWidthClass.hysteresis - 1)
+        #expect(!narrower.fitsTodayPanel && narrower.fitsTaskInspector)
+        // Per rientrare serve di nuovo la soglia piena.
+        #expect(!narrower.resolved(for: TodayPanel.minimumShellWidth - 20).fitsTodayPanel)
+
+        let narrow = narrower.resolved(for: TaskPanel.inspectorMinWidth - ShellWidthClass.hysteresis - 1)
+        #expect(!narrow.fitsTaskInspector)
+        // Prima misura sotto soglia: niente isteresi da applicare.
+        #expect(!unmeasured.resolved(for: TaskPanel.inspectorMinWidth - 1).fitsTaskInspector)
+    }
+
     /// Impostazioni: la ricerca trova pagine, funzioni e preferenze (senza
     /// badare a maiuscole e accenti); ogni funzione ha descrizione e icona e
     /// quelle generali non finiscono nella pagina del modulo.
