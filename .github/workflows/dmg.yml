@@ -4,7 +4,8 @@ name: DMG
 # niente iCloud né App Group (il widget resta vuoto), dati solo locali.
 # Si lancia a mano da Actions › DMG › Run workflow; l'artifact resta 14 giorni.
 # Con `release_tag` (es. v0.0.1) l'app prende quella versione e il DMG viene
-# allegato a una release BOZZA con quel tag (da pubblicare a mano).
+# allegato a una release BOZZA con quel tag (da pubblicare a mano); se la
+# bozza esiste già viene aggiornata.
 on:
   workflow_dispatch:
     inputs:
@@ -79,6 +80,15 @@ jobs:
           EOF
           echo "" >> notes.md
           echo "Commit: $GITHUB_SHA" >> notes.md
-          gh release create "$RELEASE_TAG" "$DMG_NAME.dmg" \
-            --draft --target "$GITHUB_SHA" \
-            --title "CalenTask $RELEASE_TAG" --notes-file notes.md
+          # Una bozza con lo stesso tag esiste già: la si aggiorna (DMG
+          # sostituito, commit e note nuovi) invece di crearne un doppione.
+          # Una release già pubblicata non si tocca: `create` fallisce.
+          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" = "true" ]; then
+            gh release upload "$RELEASE_TAG" "$DMG_NAME.dmg" --clobber
+            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" \
+              --title "CalenTask $RELEASE_TAG" --notes-file notes.md
+          else
+            gh release create "$RELEASE_TAG" "$DMG_NAME.dmg" \
+              --draft --target "$GITHUB_SHA" \
+              --title "CalenTask $RELEASE_TAG" --notes-file notes.md
+          fi
