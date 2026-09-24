@@ -4,16 +4,30 @@ import SwiftData
 /// La sidebar ricca (D51), ora CONDIVISA tra Mac e iPad (D70): sezioni con
 /// icone piene colorate e badge vivi, progetti, liste smart. Testata =
 /// switcher spazi (D50), footer = account → Impostazioni.
+///
+/// #5 — L'involucro legge lo spazio scelto e lo passa al contenuto, che
+/// filtra le attività nello STORE (query costruite nell'`init`).
 struct SidebarView: View {
+    @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
+
+    var body: some View {
+        SidebarContent(workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw))
+    }
+}
+
+private struct SidebarContent: View {
     @Environment(AppRouter.self) private var router
     @AppStorage(AppConfiguration.storageKey) private var configurationRaw = ""
     private var configuration: AppConfiguration { .decode(configurationRaw) }
 
-    @Query(filter: TodoTask.inboxPredicate)
-    private var inboxTasks: [TodoTask]
+    /// Inbox e attività aperte dello spazio scelto (tutti se nil).
+    @Query private var inboxTasks: [TodoTask]
+    @Query private var openTasks: [TodoTask]
 
-    @Query(filter: TodoTask.openPredicate)
-    private var allOpenTasks: [TodoTask]
+    init(workspaceID: UUID?) {
+        _inboxTasks = Query(filter: TodoTask.inboxPredicate(workspaceID: workspaceID))
+        _openTasks = Query(filter: TodoTask.openPredicate(workspaceID: workspaceID))
+    }
 
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var allProjects: [Project]
@@ -53,10 +67,6 @@ struct SidebarView: View {
         WorkspaceScope.filter(allTags, raw: scopeRaw, id: \.workspaceID)
     }
 
-    private var openTasks: [TodoTask] {
-        WorkspaceScope.filter(allOpenTasks, raw: scopeRaw, id: \.workspaceID)
-    }
-
     private var projects: [Project] {
         WorkspaceScope.filter(allProjects, raw: scopeRaw, id: \.workspaceID)
     }
@@ -78,7 +88,8 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        let openCounts = openCountByProject
+        let stats = OpenTaskStats(tasks: openTasks, calendar: .current)
+        let openCounts = stats.byProject
         List(selection: selection) {
             Section {
                 ForEach(configuration.navigationSections) { section in
@@ -89,7 +100,7 @@ struct SidebarView: View {
                         Image(systemName: section.filledSystemImage)
                             .foregroundStyle(section.tint)
                     }
-                    .badge(badgeCount(for: section))
+                    .badge(badgeCount(for: section, stats: stats))
                     .tag(AppDestination.section(section))
                 }
             }
@@ -176,13 +187,15 @@ struct SidebarView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             // Lo scope globale vive qui: un posto solo, sempre visibile (D44).
-            WorkspaceScopePicker(isCompact: false)
+            WorkspaceScopePicker(isCompact: false, openCount: stats.total)
                 .padding(.horizontal, DS.s)
                 .padding(.bottom, DS.xs)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
-                if configuration.isEnabled(.sidebarMiniCalendar) { sidebarMiniMonth }
+                if configuration.isEnabled(.sidebarMiniCalendar) {
+                    sidebarMiniMonth(counts: stats.byDay)
+                }
                 sidebarAccountFooter
             }
         }
@@ -195,17 +208,6 @@ struct SidebarView: View {
     }
 
     // MARK: Righe
-
-    /// #11 — un solo passaggio sulle attività aperte (già caricate) invece di
-    /// caricare, per ogni progetto e a ogni render, TUTTE le sue attività
-    /// (completate e cancellate incluse).
-    private var openCountByProject: [UUID: Int] {
-        var counts: [UUID: Int] = [:]
-        for task in allOpenTasks {
-            if let id = task.project?.id { counts[id, default: 0] += 1 }
-        }
-        return counts
-    }
 
     private func sidebarProjectRow(_ project: Project, openCount open: Int) -> some View {
         HStack(spacing: DS.s) {
@@ -248,7 +250,7 @@ struct SidebarView: View {
 
     private func smartListRow(_ list: SavedView) -> some View {
         let filters = list.filters
-        let count = allOpenTasks
+        let count = openTasks
             .filter { $0.workspaceID == list.workspaceID && filters.matches($0) }
             .count
         return Label {
@@ -275,47 +277,21 @@ struct SidebarView: View {
         }
     }
 
-    private func badgeCount(for section: AppSection) -> Int {
+    private func badgeCount(for section: AppSection, stats: OpenTaskStats) -> Int {
         switch section {
-        case .quick: openTasks.count
-        case .dashboard: todayCount
-        case .inbox: WorkspaceScope.filter(inboxTasks, raw: scopeRaw, id: \.workspaceID).count
-        case .calendar: todayEventCount
+        case .quick: stats.total
+        case .dashboard: stats.today
+        case .inbox: inboxTasks.count
+        case .calendar: stats.todayEvents
         case .projects: 0
         case .people: 0
         }
     }
 
-    private var todayCount: Int {
-        let calendar = Calendar.current
-        return openTasks.filter { task in
-            let dates = [task.startAt, task.dueAt, task.remindAt].compactMap(\.self)
-            return dates.contains { calendar.isDateInToday($0) }
-        }.count
-    }
-
-    private var todayEventCount: Int {
-        let calendar = Calendar.current
-        return openTasks.filter { task in
-            task.kind == .event && task.startAt.map { calendar.isDateInToday($0) } == true
-        }.count
-    }
-
     // MARK: Mini-mese (F2)
 
     /// Pallini = giornate con attività (inizio o scadenza), nello scope attivo.
-    private var miniMonthCounts: [Date: Int] {
-        let calendar = Calendar.current
-        var counts: [Date: Int] = [:]
-        for task in openTasks {
-            for date in [task.startAt, task.dueAt].compactMap({ $0 }) {
-                counts[calendar.startOfDay(for: date), default: 0] += 1
-            }
-        }
-        return counts
-    }
-
-    private var sidebarMiniMonth: some View {
+    private func sidebarMiniMonth(counts: [Date: Int]) -> some View {
         VStack(alignment: .leading, spacing: DS.xs) {
             HStack(spacing: DS.xs) {
                 Button {
@@ -348,7 +324,7 @@ struct SidebarView: View {
             MiniMonthView(
                 month: miniMonth,
                 selectedDay: .now.startOfDay,
-                countsByDay: miniMonthCounts,
+                countsByDay: counts,
                 showsTitle: false,
                 onSelectDay: { day in router.open(calendarDay: day) }
             )

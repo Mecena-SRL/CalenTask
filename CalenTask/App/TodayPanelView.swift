@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 /// Costanti del pannello Oggi (D74), condivise tra shell e menu macOS.
 enum TodayPanel {
@@ -13,27 +14,52 @@ enum TodayPanel {
 /// finestra ha spazio (un 27"/32" la tiene sempre). Qualunque sezione tu
 /// stia guardando, il polso della giornata resta in vista: agenda,
 /// scadenze, inbox, domani.
+///
+/// #5 — L'involucro sceglie spazio e giorno; il contenuto carica dallo
+/// store solo oggi, domani e le scadute, non tutte le attività aperte.
 struct TodayPanelView: View {
-    @Environment(AppRouter.self) private var router
-
-    @Query(filter: TodoTask.openPredicate, sort: \TodoTask.startAt)
-    private var allOpenTasks: [TodoTask]
-
-    @Query(filter: TodoTask.inboxPredicate)
-    private var allInboxTasks: [TodoTask]
-
     @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
+    /// Si aggiorna a mezzanotte: il pannello non resta su "ieri".
+    @State private var today = Calendar.current.startOfDay(for: .now)
 
     /// La X c'è solo dove esiste un modo per riaprire (menu Vista, macOS).
     var onClose: (() -> Void)?
 
-    private var openTasks: [TodoTask] {
-        WorkspaceScope.filter(allOpenTasks, raw: scopeRaw, id: \.workspaceID)
+    var body: some View {
+        TodayPanelContent(
+            workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), today: today, onClose: onClose
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            today = Calendar.current.startOfDay(for: .now)
+        }
+    }
+}
+
+private struct TodayPanelContent: View {
+    @Environment(AppRouter.self) private var router
+
+    @Query private var starting: [TodoTask]
+    @Query private var due: [TodoTask]
+    @Query private var inboxTasks: [TodoTask]
+
+    private let onClose: (() -> Void)?
+
+    init(workspaceID: UUID?, today: Date, onClose: (() -> Void)?) {
+        let dayAfterTomorrow = Calendar.current.date(byAdding: .day, value: 2, to: today) ?? today
+        _starting = Query(filter: TodoTask.openStartingPredicate(
+            from: today, to: dayAfterTomorrow, workspaceID: workspaceID
+        ))
+        _due = Query(filter: TodoTask.openDuePredicate(before: dayAfterTomorrow, workspaceID: workspaceID))
+        _inboxTasks = Query(filter: TodoTask.inboxPredicate(workspaceID: workspaceID))
+        self.onClose = onClose
     }
 
-    private var inboxCount: Int {
-        WorkspaceScope.filter(allInboxTasks, raw: scopeRaw, id: \.workspaceID).count
+    /// Oggi e domani (inizio) + scadenze fino a domani, scadute comprese.
+    private var openTasks: [TodoTask] {
+        TodoTask.mergingUnique([starting, due]).filter { !$0.isTemplate && !$0.isPhase }
     }
+
+    private var inboxCount: Int { inboxTasks.count }
 
     private var calendar: Calendar { .current }
 
