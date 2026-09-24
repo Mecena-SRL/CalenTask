@@ -1,0 +1,44 @@
+name: Smoke
+
+# Avvio reale dell'app (Release, firma ad-hoc come il DMG) su un Mac della
+# CI: resta viva per un minuto? Se crasha o si blocca, il job fallisce e
+# stampa crash report, eccezioni dal log di sistema e screenshot (artifact).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "CalenTask/**"
+      - ".github/workflows/smoke.yml"
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Avvio app (macOS, Release)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Release
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build.log
+          codesign --force --deep --sign - build/Build/Products/Release/CalenTask.app
+      - name: Avvio e osservazione
+        run: bash .github/scripts/smoke-launch.sh build/Build/Products/Release/CalenTask.app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-${{ github.run_number }}
+          path: smoke/
+          retention-days: 7
