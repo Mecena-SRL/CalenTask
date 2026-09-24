@@ -15,6 +15,31 @@ struct CalendarMathTests {
         italianCalendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
+    /// #6 — un evento di più giorni compare in ognuno (fine esclusiva).
+    @MainActor
+    @Test func multiDayEventsSpanEveryCoveredDay() {
+        let cal = italianCalendar
+        let monday = date(2026, 6, 1)
+        let thursday = date(2026, 6, 4)
+        let holiday = TodoTask(workspaceID: UUID(), title: "Ferie", kind: .event,
+                               startAt: monday, endAt: thursday, allDay: true,
+                               createdByID: UUID())
+        let meeting = TodoTask(workspaceID: UUID(), title: "Call", kind: .event,
+                               startAt: monday.addingTimeInterval(9 * 3600),
+                               endAt: monday.addingTimeInterval(10 * 3600),
+                               createdByID: UUID())
+        let index = CalendarTaskIndex(tasks: [holiday, meeting], calendar: cal)
+
+        for offset in 0..<3 {
+            let day = cal.date(byAdding: .day, value: offset, to: monday)!
+            #expect(index.allDayTasks(on: day).contains { $0 === holiday })
+            #expect(index.tasks(on: day).contains { $0 === holiday })
+        }
+        #expect(!index.tasks(on: thursday).contains { $0 === holiday })
+        #expect(index.tasks(on: monday).filter { $0 === meeting }.count == 1)
+        #expect(!index.tasks(on: date(2026, 6, 2)).contains { $0 === meeting })
+    }
+
     @Test func gridIsAlways6x7() {
         let calendar = italianCalendar
         for month in 1...12 {

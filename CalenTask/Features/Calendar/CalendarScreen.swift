@@ -233,7 +233,7 @@ struct CalendarScreen: View {
             // (ogni mutazione passa per `touch()`, che aggiorna `updatedAt` —
             // vedi CLAUDE.md), non a ogni ridisegno di `body` innescato da
             // pinch/densità/selezione giorno/hover.
-            .onChange(of: liveTasks.map(\.updatedAt), initial: true) { _, _ in
+            .onChange(of: indexKey, initial: true) { _, _ in
                 calendarIndex = CalendarTaskIndex(tasks: liveTasks, calendar: calendar)
             }
         }
@@ -1217,6 +1217,31 @@ struct CalendarScreen: View {
 
     private var hiddenProjectIDs: Set<String> {
         Set(hiddenProjectsRaw.split(separator: ",").map(String.init))
+    }
+
+    /// #6 — Chiave economica per ricostruire l'indice: prima ogni render
+    /// filtrava tutte le task, faceva il fault di `task.project` e allocava
+    /// un array di N date. Ora solo letture di attributi, zero allocazioni:
+    /// la somma delle `updatedAt` cambia a ogni `touch()` (anche arrivato da
+    /// iCloud con un orario più vecchio), il conteggio a ogni cancellazione.
+    private struct IndexKey: Equatable {
+        let count: Int
+        let updatedChecksum: Int
+        let scope: String
+        let hiddenProjects: String
+        let hidesUnassigned: Bool
+    }
+
+    private var indexKey: IndexKey {
+        IndexKey(
+            count: allTasks.count,
+            updatedChecksum: allTasks.reduce(0) {
+                $0 &+ Int($1.updatedAt.timeIntervalSinceReferenceDate * 1000)
+            },
+            scope: scopeRaw,
+            hiddenProjects: hiddenProjectsRaw,
+            hidesUnassigned: hidesUnassigned
+        )
     }
 
     private var liveTasks: [TodoTask] {

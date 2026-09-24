@@ -31,6 +31,13 @@ struct CalendarTaskIndex {
             if let dueDay, dueDay != startDay {
                 byDay[dueDay, default: []].append(task)
             }
+            // #6 — eventi su più giorni (ferie, trasferte, riprese): compaiono
+            // in ogni giorno coperto (corsia "tutto il giorno"), non solo nel
+            // primo.
+            for day in Self.continuationDays(of: task, from: startDay, calendar: calendar) {
+                if day != dueDay { byDay[day, default: []].append(task) }
+                allDay[day, default: []].append(task)
+            }
             if task.allDay, let anchor = startDay ?? dueDay {
                 allDay[anchor, default: []].append(task)
             } else if startDay == nil, let dueDay {
@@ -50,6 +57,26 @@ struct CalendarTaskIndex {
             months[CalendarMath.startOfMonth(for: day, calendar: calendar), default: 0] += items.count
         }
         countsByMonth = months
+    }
+
+    /// I giorni DOPO il primo coperti da un evento (fine esclusiva: finire a
+    /// mezzanotte non occupa il giorno dopo). Limite di 62 giorni.
+    static func continuationDays(
+        of task: TodoTask, from startDay: Date?, calendar: Calendar
+    ) -> [Date] {
+        guard let startDay, let startAt = task.startAt, let endAt = task.endAt,
+              endAt > startAt
+        else { return [] }
+        let lastDay = calendar.startOfDay(for: endAt.addingTimeInterval(-1))
+        var days: [Date] = []
+        var day = startDay
+        while days.count < 62,
+              let next = calendar.date(byAdding: .day, value: 1, to: day),
+              next <= lastDay {
+            days.append(next)
+            day = next
+        }
+        return days
     }
 
     func tasks(on day: Date) -> [TodoTask] {
