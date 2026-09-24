@@ -8,13 +8,15 @@ extension Locale {
 
 extension Calendar {
     /// Calendario italiano: settimana da lunedì, simboli dei giorni in italiano.
-    static let app: Calendar = {
+    /// Calcolata a ogni accesso (#13): prima era uno `static let` che
+    /// congelava il fuso orario del primo avvio (viaggi, cambio fuso).
+    static var app: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = .app
         calendar.firstWeekday = 2
         calendar.timeZone = .current
         return calendar
-    }()
+    }
 }
 
 extension Date {
