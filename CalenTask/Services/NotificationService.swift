@@ -1,14 +1,24 @@
 import Foundation
 import UserNotifications
 import Observation
+import SwiftData
 
 /// Schedules and cancels local notifications for tasks.
-/// Two identifiers per task: "task-<id>-remind" (remindAt) and "task-<id>-due" (dueAt).
+/// Identifiers per task, all prefixed "task-<id>-": remind (remindAt),
+/// due (dueAt), travel ("Parti ora") and alert-<min> (alertOffsetsMinutes).
 @MainActor @Observable
 final class NotificationService {
     static let shared = NotificationService()
 
     private let center = UNUserNotificationCenter.current()
+
+    /// #4 — ultima generazione di piano per task: con modifiche rapide più
+    /// `apply` si intrecciano sugli `await`; vince solo il più recente.
+    @ObservationIgnored private var generations: [UUID: Int] = [:]
+    @ObservationIgnored private var resyncGeneration = 0
+
+    /// Margine sotto il limite iOS di 64 notifiche in attesa (1 va al digest).
+    static let maxPendingTaskRequests = 60
 
     private init() {}
 
@@ -19,12 +29,44 @@ final class NotificationService {
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 
-    /// Re-syncs both triggers from the task's current state. Call after every
-    /// mutation that touches title, dates, status, or deletion.
+    /// Re-syncs every trigger from the task's current state. Call after every
+    /// mutation that touches title, dates, alerts, status, or deletion.
     func sync(task: TodoTask) {
         // Snapshot value types: @Model instances must not cross into the detached work.
         let plan = NotificationPlan(task: task)
-        Task { await apply(plan) }
+        let generation = (generations[plan.taskID] ?? 0) + 1
+        generations[plan.taskID] = generation
+        Task { await apply(plan, generation: generation) }
+    }
+
+    /// #4 — Riallinea TUTTE le notifiche delle attività aperte: all'avvio e a
+    /// ogni ritorno in primo piano. Copre le attività arrivate da iCloud
+    /// (create su un altro dispositivo, dove `touch()` non è passato da qui) e
+    /// i reinstalli. Tiene solo le più vicine, entro il limite di sistema.
+    func resyncAll(in context: ModelContext) {
+        guard let tasks = try? context.fetch(
+            FetchDescriptor<TodoTask>(predicate: TodoTask.openPredicate)
+        ) else { return }
+        let now = Date.now
+        let planned = tasks
+            .flatMap { Self.plannedRequests(for: NotificationPlan(task: $0), now: now) }
+            .sorted { $0.fireDate < $1.fireDate }
+            .prefix(Self.maxPendingTaskRequests)
+        resyncGeneration += 1
+        let generation = resyncGeneration
+        Task {
+            let pending = await center.pendingNotificationRequests()
+            guard generation == resyncGeneration else { return }
+            center.removePendingNotificationRequests(
+                withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("task-") }
+            )
+            guard !planned.isEmpty else { return }
+            await requestAuthorizationIfNeeded()
+            for item in planned {
+                guard generation == resyncGeneration else { return }
+                try? await center.add(item.request)
+            }
+        }
     }
 
     /// Immediate banner from the automation engine (D31).
@@ -42,14 +84,6 @@ final class NotificationService {
         }
     }
 
-    func cancelAll(for taskID: UUID) {
-        center.removePendingNotificationRequests(
-            withIdentifiers: [
-                Self.remindID(taskID), Self.dueID(taskID), Self.travelID(taskID),
-            ]
-        )
-    }
-
     // MARK: Internals
 
     private struct NotificationPlan {
@@ -58,6 +92,7 @@ final class NotificationService {
         let remindAt: Date?
         let dueAt: Date?
         let startAt: Date?
+        let alertOffsetsMinutes: [Int]
         let travelMinutes: Int
         let locationName: String?
         let isUrgent: Bool
@@ -69,65 +104,91 @@ final class NotificationService {
             remindAt = task.remindAt
             dueAt = task.dueAt
             startAt = task.startAt
+            alertOffsetsMinutes = task.alertOffsetsMinutes
             travelMinutes = task.travelMinutes
             locationName = task.locationName
             isUrgent = task.priority == .urgent
-            isActive = task.deletedAt == nil && !task.isDone
+            isActive = task.deletedAt == nil && !task.isDone && !task.isTemplate
         }
     }
 
-    private func apply(_ plan: NotificationPlan) async {
-        cancelAll(for: plan.taskID)
-        guard plan.isActive else { return }
+    private struct PlannedRequest {
+        let fireDate: Date
+        let request: UNNotificationRequest
+    }
 
-        var requests: [UNNotificationRequest] = []
-        if let remindAt = plan.remindAt, remindAt > .now {
-            requests.append(request(
-                id: Self.remindID(plan.taskID),
-                subtitle: "Promemoria",
-                body: plan.title,
-                taskID: plan.taskID,
-                fireDate: remindAt,
-                isUrgent: plan.isUrgent
-            ))
-        }
-        if let dueAt = plan.dueAt {
-            let fireDate = Self.dueFireDate(for: dueAt)
-            if fireDate > .now {
-                requests.append(request(
-                    id: Self.dueID(plan.taskID),
-                    subtitle: "Scadenza",
-                    body: plan.title,
-                    taskID: plan.taskID,
-                    fireDate: fireDate,
-                    isUrgent: plan.isUrgent
-                ))
-            }
-        }
-        // S5/D63 — "Parti ora": tempo di viaggio prima dell'inizio.
-        if let startAt = plan.startAt, plan.travelMinutes > 0 {
-            let fireDate = startAt.addingTimeInterval(TimeInterval(-plan.travelMinutes * 60))
-            if fireDate > .now {
-                let destination = plan.locationName.map { " → \($0)" } ?? ""
-                requests.append(request(
-                    id: Self.travelID(plan.taskID),
-                    subtitle: "Parti ora\(destination)",
-                    body: plan.title,
-                    taskID: plan.taskID,
-                    fireDate: fireDate,
-                    isUrgent: true
-                ))
-            }
-        }
-        guard !requests.isEmpty else { return }
+    private func apply(_ plan: NotificationPlan, generation: Int) async {
+        let prefix = Self.taskPrefix(plan.taskID)
+        let pending = await center.pendingNotificationRequests()
+        guard generations[plan.taskID] == generation else { return }
+        center.removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(prefix) }
+        )
+        let planned = Self.plannedRequests(for: plan, now: .now)
+        guard !planned.isEmpty else { return }
 
         await requestAuthorizationIfNeeded()
-        for request in requests {
-            try? await center.add(request)
+        for item in planned {
+            guard generations[plan.taskID] == generation else { return }
+            try? await center.add(item.request)
         }
     }
 
-    private func request(
+    /// Identificatori e orari che `sync` programmerebbe ora (per i test).
+    static func plannedSchedule(for task: TodoTask, now: Date = .now) -> [(id: String, fireDate: Date)] {
+        plannedRequests(for: NotificationPlan(task: task), now: now)
+            .map { ($0.request.identifier, $0.fireDate) }
+    }
+
+    private static func plannedRequests(for plan: NotificationPlan, now: Date) -> [PlannedRequest] {
+        guard plan.isActive else { return [] }
+        var planned: [PlannedRequest] = []
+
+        func add(id: String, subtitle: String, fireDate: Date, isUrgent: Bool) {
+            guard fireDate > now else { return }
+            planned.append(PlannedRequest(fireDate: fireDate, request: request(
+                id: id,
+                subtitle: subtitle,
+                body: plan.title,
+                taskID: plan.taskID,
+                fireDate: fireDate,
+                isUrgent: isUrgent
+            )))
+        }
+
+        if let remindAt = plan.remindAt {
+            add(id: remindID(plan.taskID), subtitle: "Promemoria",
+                fireDate: remindAt, isUrgent: plan.isUrgent)
+        }
+
+        if let dueAt = plan.dueAt {
+            add(id: dueID(plan.taskID), subtitle: "Scadenza",
+                fireDate: dueFireDate(for: dueAt), isUrgent: plan.isUrgent)
+        }
+
+        // #4 — avvisi dell'evento ("15 min prima"): prima erano salvati ed
+        // esportati su EventKit ma non notificavano mai.
+        if let anchor = plan.startAt ?? plan.dueAt.map(dueFireDate(for:)) {
+            for offset in Set(plan.alertOffsetsMinutes).sorted() {
+                add(id: alertID(plan.taskID, minutesBefore: offset),
+                    subtitle: alertSubtitle(minutesBefore: offset),
+                    fireDate: anchor.addingTimeInterval(TimeInterval(-offset * 60)),
+                    isUrgent: plan.isUrgent)
+            }
+        }
+
+        // S5/D63 — "Parti ora": tempo di viaggio prima dell'inizio.
+        if let startAt = plan.startAt, plan.travelMinutes > 0 {
+            let destination = plan.locationName.map { " → \($0)" } ?? ""
+            add(id: travelID(plan.taskID), subtitle: "Parti ora\(destination)",
+                fireDate: startAt.addingTimeInterval(TimeInterval(-plan.travelMinutes * 60)),
+                isUrgent: true)
+        }
+
+        return planned
+    }
+
+    private static func request(
         id: String, subtitle: String, body: String, taskID: UUID, fireDate: Date,
         isUrgent: Bool = false
     ) -> UNNotificationRequest {
@@ -146,6 +207,18 @@ final class NotificationService {
         return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
 
+    static func alertSubtitle(minutesBefore offset: Int) -> String {
+        switch offset {
+        case ..<1: return "Inizia ora"
+        case ..<60: return "Tra \(offset) min"
+        case ..<1440 where offset % 60 == 0: return "Tra \(offset / 60) h"
+        case ..<1440: return "Tra \(offset / 60) h \(offset % 60) min"
+        case _ where offset % 1440 == 0:
+            return offset == 1440 ? "Domani" : "Tra \(offset / 1440) giorni"
+        default: return "Tra \(offset / 60) h"
+        }
+    }
+
     /// Deadlines set via date chips land at midnight; notify at 09:00 instead.
     static func dueFireDate(for dueAt: Date) -> Date {
         let calendar = Calendar.current
@@ -159,6 +232,10 @@ final class NotificationService {
     static func remindID(_ taskID: UUID) -> String { "task-\(taskID.uuidString)-remind" }
     static func dueID(_ taskID: UUID) -> String { "task-\(taskID.uuidString)-due" }
     static func travelID(_ taskID: UUID) -> String { "task-\(taskID.uuidString)-travel" }
+    static func alertID(_ taskID: UUID, minutesBefore offset: Int) -> String {
+        "task-\(taskID.uuidString)-alert-\(offset)"
+    }
+    static func taskPrefix(_ taskID: UUID) -> String { "task-\(taskID.uuidString)-" }
 
     // MARK: Digest giornaliero (S6/D67) — UNA notifica, silenziosa, alle 8
 

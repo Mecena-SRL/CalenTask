@@ -597,6 +597,31 @@ struct DomainModelTests {
         #expect(NotificationService.dueFireDate(for: explicit) == explicit)
     }
 
+    /// #4 — gli avvisi dell'evento generano notifiche; quelli passati no;
+    /// completate e template non notificano.
+    @Test func eventAlertsAreScheduledRelativeToStart() {
+        let now = Date.now
+        let start = now.addingTimeInterval(2 * 3600)
+        let task = TodoTask(workspaceID: UUID(), title: "Riunione", kind: .event,
+                            startAt: start, alertOffsetsMinutes: [15, 60, 180, 15],
+                            createdByID: UUID())
+        let schedule = NotificationService.plannedSchedule(for: task, now: now)
+        let alertIDs = Set(schedule.map { $0.id }.filter { $0.contains("-alert-") })
+        #expect(alertIDs == [
+            NotificationService.alertID(task.id, minutesBefore: 15),
+            NotificationService.alertID(task.id, minutesBefore: 60),
+        ])   // -180 min è già passato, il doppione 15 conta una volta
+        let fifteen = schedule.first { $0.id == NotificationService.alertID(task.id, minutesBefore: 15) }
+        #expect(fifteen?.fireDate == start.addingTimeInterval(-15 * 60))
+        #expect(schedule.allSatisfy { $0.id.hasPrefix(NotificationService.taskPrefix(task.id)) })
+
+        task.statusRaw = TaskStatus.done.rawValue
+        #expect(NotificationService.plannedSchedule(for: task, now: now).isEmpty)
+        task.statusRaw = TaskStatus.todo.rawValue
+        task.isTemplate = true
+        #expect(NotificationService.plannedSchedule(for: task, now: now).isEmpty)
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext
