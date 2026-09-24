@@ -1,0 +1,662 @@
+{
+  "App/AppDelegate.swift": {
+    "mtime": 1781048026.6009936,
+    "ast_hash": "e60e014e53dfeefa550218486fcbd9e7",
+    "semantic_hash": "e60e014e53dfeefa550218486fcbd9e7"
+  },
+  "App/AppRouter.swift": {
+    "mtime": 1782147732.5578365,
+    "ast_hash": "d0dca12204fcbead89af9a9932e0221c",
+    "semantic_hash": "d0dca12204fcbead89af9a9932e0221c"
+  },
+  "App/AppShellView.swift": {
+    "mtime": 1782147739.4513006,
+    "ast_hash": "26fe717413fa0fcbe07e372eb187b513",
+    "semantic_hash": "26fe717413fa0fcbe07e372eb187b513"
+  },
+  "App/CalenTaskApp.swift": {
+    "mtime": 1782147781.1855252,
+    "ast_hash": "2581c688ba63ecc27324ceb0387fbd13",
+    "semantic_hash": "2581c688ba63ecc27324ceb0387fbd13"
+  },
+  "App/DestinationViews.swift": {
+    "mtime": 1781212837.6217544,
+    "ast_hash": "514253b7ead6d940258806162d47cf60",
+    "semantic_hash": "514253b7ead6d940258806162d47cf60"
+  },
+  "App/SidebarView.swift": {
+    "mtime": 1781254306.361735,
+    "ast_hash": "0e793cd674ade55eb6fdcc4929c1dd1a",
+    "semantic_hash": "0e793cd674ade55eb6fdcc4929c1dd1a"
+  },
+  "App/TodayPanelView.swift": {
+    "mtime": 1781190501.7089553,
+    "ast_hash": "2dde4fca3a078e2e08df4a1ae0a384b2",
+    "semantic_hash": "2dde4fca3a078e2e08df4a1ae0a384b2"
+  },
+  "Assets.xcassets/AccentColor.colorset/Contents.json": {
+    "mtime": 1781046842.4816787,
+    "ast_hash": "2b560f1af124c6dde1fae212f818b8ea",
+    "semantic_hash": "2b560f1af124c6dde1fae212f818b8ea"
+  },
+  "Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "mtime": 1781044809.155264,
+    "ast_hash": "1be20321a31ab908ee42f8b207220802",
+    "semantic_hash": "1be20321a31ab908ee42f8b207220802"
+  },
+  "Assets.xcassets/Contents.json": {
+    "mtime": 1781044807.8070078,
+    "ast_hash": "9deb2ada1cc834bbebf8bbad9c8978a1",
+    "semantic_hash": "9deb2ada1cc834bbebf8bbad9c8978a1"
+  },
+  "DesignSystem/Components/DSButtonStyles.swift": {
+    "mtime": 1781133490.8165014,
+    "ast_hash": "1faf2e7b0f0b8fe162175f0a86378609",
+    "semantic_hash": "1faf2e7b0f0b8fe162175f0a86378609"
+  },
+  "DesignSystem/Components/DSCard.swift": {
+    "mtime": 1781133467.5624373,
+    "ast_hash": "9f8f3178c086d074cd3a56f0151f0a6f",
+    "semantic_hash": "9f8f3178c086d074cd3a56f0151f0a6f"
+  },
+  "DesignSystem/Components/DSCheckToggle.swift": {
+    "mtime": 1781133459.197466,
+    "ast_hash": "69b336323d1ae268ecafb951577e2254",
+    "semantic_hash": "69b336323d1ae268ecafb951577e2254"
+  },
+  "DesignSystem/Components/DSEmptyState.swift": {
+    "mtime": 1781133482.7190957,
+    "ast_hash": "e36dbb78718d275fa4b12ea2d1c3f7a5",
+    "semantic_hash": "e36dbb78718d275fa4b12ea2d1c3f7a5"
+  },
+  "DesignSystem/Components/DSEventBlock.swift": {
+    "mtime": 1781134291.0127661,
+    "ast_hash": "9c4d494f2c3f5fae2c517ea7267ebddf",
+    "semantic_hash": "9c4d494f2c3f5fae2c517ea7267ebddf"
+  },
+  "DesignSystem/Components/DSFieldRow.swift": {
+    "mtime": 1781212032.3435123,
+    "ast_hash": "996638f5f30a228fbd05197476ce2770",
+    "semantic_hash": "996638f5f30a228fbd05197476ce2770"
+  },
+  "DesignSystem/Components/DSSectionHeader.swift": {
+    "mtime": 1781046863.0632052,
+    "ast_hash": "771c25c00ed5ee10123e3f5ba9f30813",
+    "semantic_hash": "771c25c00ed5ee10123e3f5ba9f30813"
+  },
+  "DesignSystem/Components/DateChipPicker.swift": {
+    "mtime": 1781046904.0983288,
+    "ast_hash": "cd4a53a2e95df2ba539431ee08910b68",
+    "semantic_hash": "cd4a53a2e95df2ba539431ee08910b68"
+  },
+  "DesignSystem/Components/PriorityDot.swift": {
+    "mtime": 1781046852.8463564,
+    "ast_hash": "1426041b51981d34aa74010ad7cb257f",
+    "semantic_hash": "1426041b51981d34aa74010ad7cb257f"
+  },
+  "DesignSystem/Components/StatusBadge.swift": {
+    "mtime": 1781114651.5311494,
+    "ast_hash": "a0877b2eb443036a98db934482550689",
+    "semantic_hash": "a0877b2eb443036a98db934482550689"
+  },
+  "DesignSystem/Components/TagChip.swift": {
+    "mtime": 1781133491.9468124,
+    "ast_hash": "2a2c05cc2ad2c1a6765c5d854fa6ab90",
+    "semantic_hash": "2a2c05cc2ad2c1a6765c5d854fa6ab90"
+  },
+  "DesignSystem/Components/TaskCardView.swift": {
+    "mtime": 1781133508.6326687,
+    "ast_hash": "9fcf4a6c7432d200d86706ec5ced2931",
+    "semantic_hash": "9fcf4a6c7432d200d86706ec5ced2931"
+  },
+  "DesignSystem/Components/TaskContextMenu.swift": {
+    "mtime": 1781137715.1359534,
+    "ast_hash": "31e6a3ac616363e24d11db22dcffc3a7",
+    "semantic_hash": "31e6a3ac616363e24d11db22dcffc3a7"
+  },
+  "DesignSystem/Components/TaskRow.swift": {
+    "mtime": 1781135150.4755535,
+    "ast_hash": "bcea955632f6f0b4c8a8215881cee400",
+    "semantic_hash": "bcea955632f6f0b4c8a8215881cee400"
+  },
+  "DesignSystem/Components/WorkspaceScopePicker.swift": {
+    "mtime": 1781213229.1102777,
+    "ast_hash": "bc71501f1e5147502125bf7676303467",
+    "semantic_hash": "bc71501f1e5147502125bf7676303467"
+  },
+  "DesignSystem/DSAppearance.swift": {
+    "mtime": 1781135014.8847368,
+    "ast_hash": "9f304c9424bb3538ef53f2253a194a0c",
+    "semantic_hash": "9f304c9424bb3538ef53f2253a194a0c"
+  },
+  "DesignSystem/DSElevation.swift": {
+    "mtime": 1781133446.4277456,
+    "ast_hash": "b98821f186bbd98ca0d5a707c07f24a3",
+    "semantic_hash": "b98821f186bbd98ca0d5a707c07f24a3"
+  },
+  "DesignSystem/DSMotion.swift": {
+    "mtime": 1781133446.5154507,
+    "ast_hash": "329d9e88c183ae0c406dab2454ddba0e",
+    "semantic_hash": "329d9e88c183ae0c406dab2454ddba0e"
+  },
+  "DesignSystem/DSPalette.swift": {
+    "mtime": 1781134818.6700199,
+    "ast_hash": "c1153bfb782671c52791aa0310397d88",
+    "semantic_hash": "c1153bfb782671c52791aa0310397d88"
+  },
+  "DesignSystem/DSSpacing.swift": {
+    "mtime": 1781046817.4439263,
+    "ast_hash": "c9a22d22db4f265f4f7fbcd3e63182b2",
+    "semantic_hash": "c9a22d22db4f265f4f7fbcd3e63182b2"
+  },
+  "DesignSystem/DSTypography.swift": {
+    "mtime": 1781046820.286225,
+    "ast_hash": "2f734ea02a30b169e0f69427415b667f",
+    "semantic_hash": "2f734ea02a30b169e0f69427415b667f"
+  },
+  "DesignSystem/Theme.swift": {
+    "mtime": 1781046832.2567153,
+    "ast_hash": "46aafea459a4a474dc27838c5d5c89a8",
+    "semantic_hash": "46aafea459a4a474dc27838c5d5c89a8"
+  },
+  "Features/Attachments/AttachmentsSection.swift": {
+    "mtime": 1781133552.4439,
+    "ast_hash": "a2c747f6bf97bb63c8e864091080cf23",
+    "semantic_hash": "a2c747f6bf97bb63c8e864091080cf23"
+  },
+  "Features/Automations/AutomationListView.swift": {
+    "mtime": 1781212124.816373,
+    "ast_hash": "0853df428e7def4ae8f6c2cb8d845e05",
+    "semantic_hash": "0853df428e7def4ae8f6c2cb8d845e05"
+  },
+  "Features/Browse/BrowseView.swift": {
+    "mtime": 1781212974.6287632,
+    "ast_hash": "0e9f1663475363abee7d594f96200bb9",
+    "semantic_hash": "0e9f1663475363abee7d594f96200bb9"
+  },
+  "Features/Calendar/CalendarMath.swift": {
+    "mtime": 1782164948.2859254,
+    "ast_hash": "dc6daecd305f61e34d5f24e87a4e455f",
+    "semantic_hash": "dc6daecd305f61e34d5f24e87a4e455f"
+  },
+  "Features/Calendar/CalendarScreen.swift": {
+    "mtime": 1782164994.1044583,
+    "ast_hash": "80097f6edb4b58e40d94c8d6137f5a81",
+    "semantic_hash": "80097f6edb4b58e40d94c8d6137f5a81"
+  },
+  "Features/Calendar/DayAgendaView.swift": {
+    "mtime": 1782165099.117007,
+    "ast_hash": "82398efd246d7899f361a790390e8e6c",
+    "semantic_hash": "82398efd246d7899f361a790390e8e6c"
+  },
+  "Features/Calendar/DayAllDayLane.swift": {
+    "mtime": 1782161369.8014464,
+    "ast_hash": "1845fcb945b037f810ffb7414477716a",
+    "semantic_hash": "1845fcb945b037f810ffb7414477716a"
+  },
+  "Features/Calendar/DayHeaderView.swift": {
+    "mtime": 1782162892.3214037,
+    "ast_hash": "9ddd9240cb3644524f36789180181a22",
+    "semantic_hash": "9ddd9240cb3644524f36789180181a22"
+  },
+  "Features/Calendar/DayTimelineView.swift": {
+    "mtime": 1782165072.0555704,
+    "ast_hash": "40214e30306612c5f901e60e2bf797e1",
+    "semantic_hash": "40214e30306612c5f901e60e2bf797e1"
+  },
+  "Features/Calendar/MiniMonthView.swift": {
+    "mtime": 1782150219.5886576,
+    "ast_hash": "811a694ec74addcba9d19fe867ce857f",
+    "semantic_hash": "811a694ec74addcba9d19fe867ce857f"
+  },
+  "Features/Calendar/MonthGridView.swift": {
+    "mtime": 1782150234.0245807,
+    "ast_hash": "fd8578c1677e3ac373bdc844d9c90bb2",
+    "semantic_hash": "fd8578c1677e3ac373bdc844d9c90bb2"
+  },
+  "Features/Calendar/WeekGridView.swift": {
+    "mtime": 1782150203.0092213,
+    "ast_hash": "2c12162019a3068cca534c483e2ceaaf",
+    "semantic_hash": "2c12162019a3068cca534c483e2ceaaf"
+  },
+  "Features/Capture/CaptureAssistView.swift": {
+    "mtime": 1781137082.5753522,
+    "ast_hash": "29eb6241c9249617b39ac8d6b7cb1326",
+    "semantic_hash": "29eb6241c9249617b39ac8d6b7cb1326"
+  },
+  "Features/Capture/MenuBarCaptureView.swift": {
+    "mtime": 1781047122.7097309,
+    "ast_hash": "4d70dd695e4ee39e074944b2b0e2ec41",
+    "semantic_hash": "4d70dd695e4ee39e074944b2b0e2ec41"
+  },
+  "Features/Capture/QuickCaptureView.swift": {
+    "mtime": 1781138160.7798626,
+    "ast_hash": "a2157714b85b81efd6414c7a99b33ea3",
+    "semantic_hash": "a2157714b85b81efd6414c7a99b33ea3"
+  },
+  "Features/Capture/TaskComposerView.swift": {
+    "mtime": 1781211365.2572446,
+    "ast_hash": "2bb1f7c6221c94f5b6c7b38b5be43eaa",
+    "semantic_hash": "2bb1f7c6221c94f5b6c7b38b5be43eaa"
+  },
+  "Features/CommandPalette/CommandPaletteView.swift": {
+    "mtime": 1782147770.0579863,
+    "ast_hash": "323f3a500329e24ec9139f979318314b",
+    "semantic_hash": "323f3a500329e24ec9139f979318314b"
+  },
+  "Features/Crew/CrewView.swift": {
+    "mtime": 1781212058.840032,
+    "ast_hash": "74a9fdc1d53c4c783a2fe042eef0889a",
+    "semantic_hash": "74a9fdc1d53c4c783a2fe042eef0889a"
+  },
+  "Features/Dashboard/DashboardInsights.swift": {
+    "mtime": 1781872796.7422407,
+    "ast_hash": "997fae317c66e629bc70a9120e057e88",
+    "semantic_hash": "997fae317c66e629bc70a9120e057e88"
+  },
+  "Features/Dashboard/DashboardView.swift": {
+    "mtime": 1782147804.147606,
+    "ast_hash": "2532df8924b357e90a2332f0926d0803",
+    "semantic_hash": "2532df8924b357e90a2332f0926d0803"
+  },
+  "Features/Dashboard/DashboardWidget.swift": {
+    "mtime": 1781875738.7631595,
+    "ast_hash": "e5cffbfe7aac4a9fabcc723da6e41676",
+    "semantic_hash": "e5cffbfe7aac4a9fabcc723da6e41676"
+  },
+  "Features/Dashboard/ReorderableWidgetGrid.swift": {
+    "mtime": 1782137233.8278265,
+    "ast_hash": "72e707554c6b4bfc745d0c94dffd1540",
+    "semantic_hash": "72e707554c6b4bfc745d0c94dffd1540"
+  },
+  "Features/Dashboard/RoleDashboardView.swift": {
+    "mtime": 1782137787.7198896,
+    "ast_hash": "62ec20cc78b802d823b60ff0dc5231c5",
+    "semantic_hash": "62ec20cc78b802d823b60ff0dc5231c5"
+  },
+  "Features/Dashboard/StatBlock.swift": {
+    "mtime": 1781871670.2413902,
+    "ast_hash": "ab521f09bc04573affae9db11fe95dcc",
+    "semantic_hash": "ab521f09bc04573affae9db11fe95dcc"
+  },
+  "Features/Dashboard/StatTile.swift": {
+    "mtime": 1781133471.9918938,
+    "ast_hash": "35e263e2044c32be41445ba6b8eb0cd2",
+    "semantic_hash": "35e263e2044c32be41445ba6b8eb0cd2"
+  },
+  "Features/Fields/CustomFieldValueRow.swift": {
+    "mtime": 1781113957.5957358,
+    "ast_hash": "c33781d4ce23a200aa7ed099b7f88ec7",
+    "semantic_hash": "c33781d4ce23a200aa7ed099b7f88ec7"
+  },
+  "Features/Fields/CustomFieldsEditorView.swift": {
+    "mtime": 1781212119.2352238,
+    "ast_hash": "8e70be3a75a6be22cd37bf50cf1a9384",
+    "semantic_hash": "8e70be3a75a6be22cd37bf50cf1a9384"
+  },
+  "Features/Inbox/InboxProvenance.swift": {
+    "mtime": 1782146772.4812932,
+    "ast_hash": "ea270767a439575610a69fdaefe923a6",
+    "semantic_hash": "ea270767a439575610a69fdaefe923a6"
+  },
+  "Features/Inbox/InboxView.swift": {
+    "mtime": 1782147757.0358474,
+    "ast_hash": "f7e6b96854761a44ace9e1f762be25b7",
+    "semantic_hash": "f7e6b96854761a44ace9e1f762be25b7"
+  },
+  "Features/Inbox/TriageFlowView.swift": {
+    "mtime": 1782147721.2781718,
+    "ast_hash": "ead05424303e6962d7e054d35739339d",
+    "semantic_hash": "ead05424303e6962d7e054d35739339d"
+  },
+  "Features/Inbox/TriageRow.swift": {
+    "mtime": 1782146783.459442,
+    "ast_hash": "ef3b42540d0cc697a2f7dee0537951f9",
+    "semantic_hash": "ef3b42540d0cc697a2f7dee0537951f9"
+  },
+  "Features/Intake/IntakeFormView.swift": {
+    "mtime": 1782146694.5129192,
+    "ast_hash": "4809cae992cdb33ea146b4707f77d6da",
+    "semantic_hash": "4809cae992cdb33ea146b4707f77d6da"
+  },
+  "Features/Onboarding/WelcomeView.swift": {
+    "mtime": 1781138525.1969602,
+    "ast_hash": "e7121e8668943db35cc1f6f1e86837bf",
+    "semantic_hash": "e7121e8668943db35cc1f6f1e86837bf"
+  },
+  "Features/People/ContactsImportView.swift": {
+    "mtime": 1781184880.5899956,
+    "ast_hash": "1e601e43b453ef5e24fb78a9a421c862",
+    "semantic_hash": "1e601e43b453ef5e24fb78a9a421c862"
+  },
+  "Features/People/PeopleView.swift": {
+    "mtime": 1781211443.1788814,
+    "ast_hash": "83198b2740a1bebf4f51f32f6d00e69a",
+    "semantic_hash": "83198b2740a1bebf4f51f32f6d00e69a"
+  },
+  "Features/People/PersonDetailView.swift": {
+    "mtime": 1781184853.927299,
+    "ast_hash": "a5bc4fc83032984f4fbe9341b0c7735b",
+    "semantic_hash": "a5bc4fc83032984f4fbe9341b0c7735b"
+  },
+  "Features/Planning/BatchTaskEntryView.swift": {
+    "mtime": 1781097391.1560678,
+    "ast_hash": "63775fc1db56ac068f7523bd9830cc33",
+    "semantic_hash": "63775fc1db56ac068f7523bd9830cc33"
+  },
+  "Features/Planning/PhasePlannerView.swift": {
+    "mtime": 1781133648.035591,
+    "ast_hash": "0be0afba449a60087b146c19ab494fad",
+    "semantic_hash": "0be0afba449a60087b146c19ab494fad"
+  },
+  "Features/Production/ProjectStripboardView.swift": {
+    "mtime": 1781212096.101799,
+    "ast_hash": "033e0c9f6bbfbae05ca73b42716435eb",
+    "semantic_hash": "033e0c9f6bbfbae05ca73b42716435eb"
+  },
+  "Features/Production/ShootDayEditorView.swift": {
+    "mtime": 1781212088.3073432,
+    "ast_hash": "f97c6018f0780527b16a12ccc3601852",
+    "semantic_hash": "f97c6018f0780527b16a12ccc3601852"
+  },
+  "Features/Projects/NewProjectSheet.swift": {
+    "mtime": 1781212053.6822746,
+    "ast_hash": "e1d26531a8dcaa5830068360d3b44e20",
+    "semantic_hash": "e1d26531a8dcaa5830068360d3b44e20"
+  },
+  "Features/Projects/PhaseSectionView.swift": {
+    "mtime": 1782137790.5151556,
+    "ast_hash": "e8ffe4b49df85f83226b00ac328956ec",
+    "semantic_hash": "e8ffe4b49df85f83226b00ac328956ec"
+  },
+  "Features/Projects/PipelineEditorView.swift": {
+    "mtime": 1781136529.7805533,
+    "ast_hash": "976992006b75527c4f5bd3356933b2c1",
+    "semantic_hash": "976992006b75527c4f5bd3356933b2c1"
+  },
+  "Features/Projects/ProjectDetailView.swift": {
+    "mtime": 1782137792.8840156,
+    "ast_hash": "80363b4a4dabe6afa47c0de2e15f65fd",
+    "semantic_hash": "80363b4a4dabe6afa47c0de2e15f65fd"
+  },
+  "Features/Projects/ProjectListView.swift": {
+    "mtime": 1781254413.3926218,
+    "ast_hash": "cfaa70d402d61c58ec1d08088536ce88",
+    "semantic_hash": "cfaa70d402d61c58ec1d08088536ce88"
+  },
+  "Features/Projects/TaskDeepLinkView.swift": {
+    "mtime": 1781048087.449998,
+    "ast_hash": "677e8ac137ed47ea1b0b5333fcd565c1",
+    "semantic_hash": "677e8ac137ed47ea1b0b5333fcd565c1"
+  },
+  "Features/Projects/TaskDetailView.swift": {
+    "mtime": 1781211402.3266664,
+    "ast_hash": "7ada18d7017bd7d5e81a3e75a4e5a3f5",
+    "semantic_hash": "7ada18d7017bd7d5e81a3e75a4e5a3f5"
+  },
+  "Features/Projects/TaskInspectorView.swift": {
+    "mtime": 1782137771.1279092,
+    "ast_hash": "7034a724114e2ed29e88333e84c22d32",
+    "semantic_hash": "7034a724114e2ed29e88333e84c22d32"
+  },
+  "Features/Projects/TaskOpenLink.swift": {
+    "mtime": 1782137778.6974928,
+    "ast_hash": "043eb7f2a320e4892a027080fbf12243",
+    "semantic_hash": "043eb7f2a320e4892a027080fbf12243"
+  },
+  "Features/Projects/Views/ProjectBoardView.swift": {
+    "mtime": 1781255013.9379635,
+    "ast_hash": "bb2131bdf0c9626d1d6d233ee2e8d1a7",
+    "semantic_hash": "bb2131bdf0c9626d1d6d233ee2e8d1a7"
+  },
+  "Features/Projects/Views/ProjectGanttView.swift": {
+    "mtime": 1781254893.9148996,
+    "ast_hash": "c09dbe91af8127f5f95bd9afe10e1099",
+    "semantic_hash": "c09dbe91af8127f5f95bd9afe10e1099"
+  },
+  "Features/Projects/Views/ProjectKanbanView.swift": {
+    "mtime": 1781255039.841807,
+    "ast_hash": "447ea8c67b4883db7eb0a82d6f00bc55",
+    "semantic_hash": "447ea8c67b4883db7eb0a82d6f00bc55"
+  },
+  "Features/Projects/Views/ProjectSummaryView.swift": {
+    "mtime": 1782137795.7197623,
+    "ast_hash": "5af971a383079f26bd3daad4cc1ba2a1",
+    "semantic_hash": "5af971a383079f26bd3daad4cc1ba2a1"
+  },
+  "Features/Quick/QuickModeView.swift": {
+    "mtime": 1781249808.4809003,
+    "ast_hash": "fd25330b8bd5d1c364205dc1945942ba",
+    "semantic_hash": "fd25330b8bd5d1c364205dc1945942ba"
+  },
+  "Features/Settings/AccountSection.swift": {
+    "mtime": 1781132159.9926097,
+    "ast_hash": "5398af3e109ab601547d659fb48cdf02",
+    "semantic_hash": "5398af3e109ab601547d659fb48cdf02"
+  },
+  "Features/Settings/SettingsView.swift": {
+    "mtime": 1781138179.2579122,
+    "ast_hash": "53158774493603d6f77a10980a9ec678",
+    "semantic_hash": "53158774493603d6f77a10980a9ec678"
+  },
+  "Features/SmartLists/SmartListView.swift": {
+    "mtime": 1782137798.519355,
+    "ast_hash": "4a1e2c31ca59c50d0b2cc5b7cd373157",
+    "semantic_hash": "4a1e2c31ca59c50d0b2cc5b7cd373157"
+  },
+  "Features/Tags/TagManagerView.swift": {
+    "mtime": 1781097455.6818802,
+    "ast_hash": "ef57d52cdfb550ef9567b011d4cd60d5",
+    "semantic_hash": "ef57d52cdfb550ef9567b011d4cd60d5"
+  },
+  "Features/Tags/TaggedTasksView.swift": {
+    "mtime": 1782137800.844949,
+    "ast_hash": "01b3f2ee818bd78da085622094208e2e",
+    "semantic_hash": "01b3f2ee818bd78da085622094208e2e"
+  },
+  "Features/Team/TeamView.swift": {
+    "mtime": 1781114239.768741,
+    "ast_hash": "df308c2734af1f15b898135ee64e298e",
+    "semantic_hash": "df308c2734af1f15b898135ee64e298e"
+  },
+  "Features/Workspaces/WorkspaceEditorView.swift": {
+    "mtime": 1781134904.5362756,
+    "ast_hash": "4ca3d3e71b8108e6a2a7ab763a196576",
+    "semantic_hash": "4ca3d3e71b8108e6a2a7ab763a196576"
+  },
+  "Models/Attachment.swift": {
+    "mtime": 1781131064.8315685,
+    "ast_hash": "08a8b5b31af143729745a5b815593d8c",
+    "semantic_hash": "08a8b5b31af143729745a5b815593d8c"
+  },
+  "Models/AutomationRule.swift": {
+    "mtime": 1781131064.8327515,
+    "ast_hash": "ae9ccf62dec7235fc899fc92721a2fd2",
+    "semantic_hash": "ae9ccf62dec7235fc899fc92721a2fd2"
+  },
+  "Models/CalenTaskSchema.swift": {
+    "mtime": 1782146631.4983163,
+    "ast_hash": "228ad2f9c56d9a6322cf34b12b117307",
+    "semantic_hash": "228ad2f9c56d9a6322cf34b12b117307"
+  },
+  "Models/Contact.swift": {
+    "mtime": 1781184680.4761746,
+    "ast_hash": "da3a71ae6c6c86233b09db3a33bc0f38",
+    "semantic_hash": "da3a71ae6c6c86233b09db3a33bc0f38"
+  },
+  "Models/CrewAssignment.swift": {
+    "mtime": 1781135762.4528446,
+    "ast_hash": "3d80fb36a7d917734bf6db157214aed4",
+    "semantic_hash": "3d80fb36a7d917734bf6db157214aed4"
+  },
+  "Models/CustomField.swift": {
+    "mtime": 1781131064.8321683,
+    "ast_hash": "14fc9ec6eb06aa325e154de4063c18d0",
+    "semantic_hash": "14fc9ec6eb06aa325e154de4063c18d0"
+  },
+  "Models/DomainEnums.swift": {
+    "mtime": 1782146604.6269875,
+    "ast_hash": "58cbf51f4d41c29030cbf45b7d0b6cf0",
+    "semantic_hash": "58cbf51f4d41c29030cbf45b7d0b6cf0"
+  },
+  "Models/Membership.swift": {
+    "mtime": 1781131064.8319428,
+    "ast_hash": "b0278d6678ba4326575bbc04252a5420",
+    "semantic_hash": "b0278d6678ba4326575bbc04252a5420"
+  },
+  "Models/ProductionScene.swift": {
+    "mtime": 1781135781.5130596,
+    "ast_hash": "05b472968cc34927ca46657d1a3430ca",
+    "semantic_hash": "05b472968cc34927ca46657d1a3430ca"
+  },
+  "Models/Project+SmartStatus.swift": {
+    "mtime": 1781138047.1196659,
+    "ast_hash": "b5caddad242a0ab1db24dbe7b9b9c99c",
+    "semantic_hash": "b5caddad242a0ab1db24dbe7b9b9c99c"
+  },
+  "Models/Project.swift": {
+    "mtime": 1781255114.1519375,
+    "ast_hash": "4dc9d7d942f4247c66cd93d4b6959125",
+    "semantic_hash": "4dc9d7d942f4247c66cd93d4b6959125"
+  },
+  "Models/SavedView.swift": {
+    "mtime": 1781131064.832515,
+    "ast_hash": "32038023877745dd20a30af4a721e03c",
+    "semantic_hash": "32038023877745dd20a30af4a721e03c"
+  },
+  "Models/Tag.swift": {
+    "mtime": 1781190111.3947525,
+    "ast_hash": "ce471b988660dc6bf9ddc987368d0ee5",
+    "semantic_hash": "ce471b988660dc6bf9ddc987368d0ee5"
+  },
+  "Models/TaskDependency.swift": {
+    "mtime": 1781131064.8311954,
+    "ast_hash": "314ed094d750003c58406b2f34c1ba1d",
+    "semantic_hash": "314ed094d750003c58406b2f34c1ba1d"
+  },
+  "Models/TodoTask+Mutations.swift": {
+    "mtime": 1781248866.6892793,
+    "ast_hash": "4986a69adcaf6bf2aa1e8fa882f93698",
+    "semantic_hash": "4986a69adcaf6bf2aa1e8fa882f93698"
+  },
+  "Models/TodoTask+Tags.swift": {
+    "mtime": 1781097354.778772,
+    "ast_hash": "df486108eb9ae0d4c97aacb3131b4b64",
+    "semantic_hash": "df486108eb9ae0d4c97aacb3131b4b64"
+  },
+  "Models/TodoTask.swift": {
+    "mtime": 1782146619.3317952,
+    "ast_hash": "cddb9b082e1701b39ad044763bbd4005",
+    "semantic_hash": "cddb9b082e1701b39ad044763bbd4005"
+  },
+  "Models/UserProfile.swift": {
+    "mtime": 1781131064.8317451,
+    "ast_hash": "644b9e0815cfba9e2755b5eb7019a891",
+    "semantic_hash": "644b9e0815cfba9e2755b5eb7019a891"
+  },
+  "Models/WorkflowStage.swift": {
+    "mtime": 1781131064.831428,
+    "ast_hash": "e090be08dd7fed6230c289a0ebdaf153",
+    "semantic_hash": "e090be08dd7fed6230c289a0ebdaf153"
+  },
+  "Models/Workspace.swift": {
+    "mtime": 1781134871.318425,
+    "ast_hash": "6127e2246a52f3ff71bb3ad1e572e273",
+    "semantic_hash": "6127e2246a52f3ff71bb3ad1e572e273"
+  },
+  "Services/AutomationEngine.swift": {
+    "mtime": 1782146720.84312,
+    "ast_hash": "8df4f1453f2b0667dba81b3dd54a503a",
+    "semantic_hash": "8df4f1453f2b0667dba81b3dd54a503a"
+  },
+  "Services/CalendarSyncService.swift": {
+    "mtime": 1781094753.3218684,
+    "ast_hash": "0a3beaf0e773814cd072b8f6e340af58",
+    "semantic_hash": "0a3beaf0e773814cd072b8f6e340af58"
+  },
+  "Services/CallSheetService.swift": {
+    "mtime": 1781135930.437324,
+    "ast_hash": "8f2c4577e7d4e6af819bf602a9b4c178",
+    "semantic_hash": "8f2c4577e7d4e6af819bf602a9b4c178"
+  },
+  "Services/ConflictService.swift": {
+    "mtime": 1781135901.6867113,
+    "ast_hash": "029d548c92900165d55108f012c9f1dc",
+    "semantic_hash": "029d548c92900165d55108f012c9f1dc"
+  },
+  "Services/ContactsImportService.swift": {
+    "mtime": 1781184756.8164053,
+    "ast_hash": "91ac37f20eb8e653db04bbb31a7356c1",
+    "semantic_hash": "91ac37f20eb8e653db04bbb31a7356c1"
+  },
+  "Services/EmailService.swift": {
+    "mtime": 1781136567.942932,
+    "ast_hash": "3a82ff02fb4afa88378f694bb835f078",
+    "semantic_hash": "3a82ff02fb4afa88378f694bb835f078"
+  },
+  "Services/NotificationService.swift": {
+    "mtime": 1781138144.9980843,
+    "ast_hash": "326250dc6f7521d43df1658295effcca",
+    "semantic_hash": "326250dc6f7521d43df1658295effcca"
+  },
+  "Services/SeedService.swift": {
+    "mtime": 1781134869.4904406,
+    "ast_hash": "76cc1f9d55fe0d20952391df29160404",
+    "semantic_hash": "76cc1f9d55fe0d20952391df29160404"
+  },
+  "Services/SpeechCaptureService.swift": {
+    "mtime": 1781138135.1882477,
+    "ast_hash": "eb446f7ad249315828483d99bdd2dfb2",
+    "semantic_hash": "eb446f7ad249315828483d99bdd2dfb2"
+  },
+  "Services/TagService.swift": {
+    "mtime": 1781097337.689858,
+    "ast_hash": "01e99f52c6a3af77d1ca9ace6820e62e",
+    "semantic_hash": "01e99f52c6a3af77d1ca9ace6820e62e"
+  },
+  "Services/TemplateCatalog.swift": {
+    "mtime": 1781112992.334045,
+    "ast_hash": "954bdc49b395453816f22015ef1c9164",
+    "semantic_hash": "954bdc49b395453816f22015ef1c9164"
+  },
+  "Services/TemplateService.swift": {
+    "mtime": 1781116200.868186,
+    "ast_hash": "027da3287bfd207f665164011e75fff9",
+    "semantic_hash": "027da3287bfd207f665164011e75fff9"
+  },
+  "Services/WeatherService.swift": {
+    "mtime": 1782148928.142685,
+    "ast_hash": "157cf0d8bb0cc884782d700dcb07a4d8",
+    "semantic_hash": "157cf0d8bb0cc884782d700dcb07a4d8"
+  },
+  "Support/CaptureParser.swift": {
+    "mtime": 1781137052.2385879,
+    "ast_hash": "09608b558ee0293a04be4846fe95b6c6",
+    "semantic_hash": "09608b558ee0293a04be4846fe95b6c6"
+  },
+  "Support/Date+CalenTask.swift": {
+    "mtime": 1781046881.0248442,
+    "ast_hash": "f9aab2c3fdae149f15ced58ce9a76a12",
+    "semantic_hash": "f9aab2c3fdae149f15ced58ce9a76a12"
+  },
+  "Support/DebugSeeder.swift": {
+    "mtime": 1781081271.8338785,
+    "ast_hash": "389bd415d7b549c26b619c8a8bc0e4db",
+    "semantic_hash": "389bd415d7b549c26b619c8a8bc0e4db"
+  },
+  "Support/NaturalDateParser.swift": {
+    "mtime": 1781115998.3734064,
+    "ast_hash": "bc54aa03c0802b407200ec594c8f5c2a",
+    "semantic_hash": "bc54aa03c0802b407200ec594c8f5c2a"
+  },
+  "Support/PreviewSampleData.swift": {
+    "mtime": 1781135840.8191426,
+    "ast_hash": "20eea3688280d991e51e1145e0be0494",
+    "semantic_hash": "20eea3688280d991e51e1145e0be0494"
+  },
+  "Support/WidgetBridge.swift": {
+    "mtime": 1781095793.418221,
+    "ast_hash": "8784b5fdd05b9b96f80331648c730dab",
+    "semantic_hash": "8784b5fdd05b9b96f80331648c730dab"
+  }
+}
