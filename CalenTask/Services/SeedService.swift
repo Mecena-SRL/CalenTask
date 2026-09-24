@@ -17,7 +17,7 @@ enum SeedService {
             FetchDescriptor<Workspace>(sortBy: [SortDescriptor(\.createdAt)])
         )
 
-        let personal: Workspace
+        var personal: Workspace
         if let existing = workspaces.first(where: { $0.isPersonal && $0.deletedAt == nil }) {
             personal = existing
         } else {
@@ -25,9 +25,18 @@ enum SeedService {
             context.insert(personal)
         }
 
+        // #9 — prima si fondono i doppioni, POI si risolvono spazio e "me":
+        // prima si restituiva (e si salvava come corrente) un doppione appena
+        // eliminato dalla dedupe.
+        try dedupeAfterCloudMerge(in: context)
+        if personal.deletedAt != nil, let keeper = try context.fetch(
+            FetchDescriptor<Workspace>(sortBy: [SortDescriptor(\.createdAt)])
+        ).first(where: { $0.isPersonal && $0.deletedAt == nil }) {
+            personal = keeper
+        }
+
         let me = try currentUser(in: context)
         try ensureMemberships(for: me, in: context)
-        try dedupeAfterCloudMerge(in: context)
         try context.save()
 
         let current = try currentWorkspace(in: context) ?? personal
@@ -135,10 +144,18 @@ enum SeedService {
         let seedProfiles = try context.fetch(
             FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.createdAt)])
         ).filter { $0.deletedAt == nil && $0.isLocalSeed }
-        let profileGroups = Dictionary(grouping: seedProfiles) { $0.name.lowercased() }
-        for (_, group) in profileGroups where group.count > 1 {
-            let keeper = group[0]
-            for duplicate in group.dropFirst() {
+        // #9 — database iCloud PRIVATO = un solo utente: tutti i profili "me"
+        // auto-generati sono la stessa persona vista da dispositivi diversi.
+        // Raggrupparli per nome non li univa mai ("Io" su iPhone, nome
+        // completo su Mac). Vince il più vecchio; tiene il nome più parlante.
+        if seedProfiles.count > 1 {
+            let keeper = seedProfiles[0]
+            if keeper.name == "Io",
+               let named = seedProfiles.first(where: { $0.name != "Io" && !$0.name.isEmpty }) {
+                keeper.name = named.name
+                keeper.updatedAt = .now
+            }
+            for duplicate in seedProfiles.dropFirst() {
                 try repointUser(from: duplicate.id, to: keeper.id, in: context)
                 duplicate.deletedAt = .now
                 duplicate.updatedAt = .now
