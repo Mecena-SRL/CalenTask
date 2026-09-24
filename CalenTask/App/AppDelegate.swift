@@ -49,5 +49,10 @@ extension AppDelegate: NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerAsDelegate()
     }
+
+    /// Chiusura normale: il prossimo avvio non è "sicuro".
+    func applicationWillTerminate(_ notification: Notification) {
+        LaunchGuard.markLaunchCompleted()
+    }
 }
 #endif

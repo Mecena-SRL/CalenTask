@@ -77,7 +77,10 @@ final class AppRouter {
 
     init() {
         let raw = UserDefaults.standard.string(forKey: AppConfiguration.storageKey) ?? ""
-        destination = .section(AppConfiguration.decode(raw).initialSection)
+        // Avvio sicuro (dopo un avvio interrotto): la pagina più semplice.
+        destination = LaunchGuard.isSafeMode
+            ? .section(.dashboard)
+            : .section(AppConfiguration.decode(raw).initialSection)
     }
 
     /// Set by notification deep links; the shell watches it and shows the task detail.

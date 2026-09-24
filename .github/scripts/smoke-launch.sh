@@ -37,13 +37,11 @@ run_scenario() {
     fi
   done
   if [ "$alive" -eq 1 ]; then
-    # Viva, ma reattiva? Un main thread bloccato non risponde ad AppleScript.
-    if osascript -e "with timeout of 10 seconds" -e "tell application id \"$BUNDLE_ID\" to get name" -e "end timeout" >/dev/null 2>&1; then
-      echo "✅ $name: viva e reattiva dopo ${seconds}s"
-    else
-      echo "⚠️ $name: viva ma NON risponde (main thread bloccato?)"
-      sample "$pid" 5 -file "$OUT/$name-sample.txt" >/dev/null 2>&1 || true
-      head -120 "$OUT/$name-sample.txt" 2>/dev/null || true
+    echo "✅ $name: viva dopo ${seconds}s"
+    # Cosa fa il main thread: un ciclo di layout si riconosce subito.
+    sample "$pid" 3 -file "$OUT/$name-sample.txt" >/dev/null 2>&1 || true
+    if grep -qE "_postWindowNeedsUpdateConstraints|layoutSubtreeIfNeeded" "$OUT/$name-sample.txt" 2>/dev/null; then
+      echo "⚠️ $name: main thread impegnato nel layout (possibile ciclo)"
       alive=0
     fi
     kill "$pid" 2>/dev/null
@@ -62,6 +60,20 @@ reset_state() {
   rm -rf "$HOME/Library/Application Support/default.store"* \
          "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" 2>/dev/null || true
 }
+
+# Fuori dalla CI (sul tuo Mac): un solo avvio, senza toccare dati e
+# preferenze — serve a raccogliere eccezione e crash report reali.
+if [ "${CI:-}" != "true" ]; then
+  touch "$OUT/.inizio"
+  run_scenario "avvio-locale" 45
+  echo "=== Crash report recenti ==="
+  find "$REPORTS" -name 'CalenTask*' -newer "$OUT/.inizio" 2>/dev/null | while read -r f; do
+    cp "$f" "$OUT/"; echo "----- $f -----"; head -150 "$f"
+  done
+  echo "Log, sample e screenshot in: $OUT/"
+  [ "$failures" -eq 0 ] && echo "✅ Avvio riuscito" || echo "❌ Avvio fallito"
+  exit "$failures"
+fi
 
 # 1 — Primo avvio, stato pulito.
 reset_state

@@ -16,6 +16,8 @@ struct DeveloperSettingsView: View {
     /// (con la firma ad-hoc ogni build nuova chiede di nuovo il permesso).
     @AppStorage(GitHubTokenStore.savedFlagKey) private var hasToken = false
     @State private var copiedDiagnostics = false
+    @AppStorage(LaunchGuard.forceSafeModeKey) private var forceSafeMode = false
+    @State private var didResetViews = false
 
     var body: some View {
         Form {
@@ -25,6 +27,27 @@ struct DeveloperSettingsView: View {
             updatesSection
             tokenSection
             #endif
+
+            Section {
+                if LaunchGuard.isSafeMode {
+                    Label("Questa sessione è in avvio sicuro.", systemImage: "stethoscope")
+                        .foregroundStyle(.orange)
+                }
+                SettingsToggleRow(
+                    title: "Avvio sicuro alla prossima apertura",
+                    detail: "Finestra ripristinata, senza pannello destro né mini-calendario. Parte da solo se un avvio si interrompe.",
+                    systemImage: "stethoscope", tint: .orange,
+                    isOn: $forceSafeMode
+                )
+                Button {
+                    resetViews()
+                } label: {
+                    Label(didResetViews ? "Fatto: vale dal prossimo avvio" : "Ripristina finestra e viste",
+                          systemImage: didResetViews ? "checkmark" : "arrow.counterclockwise")
+                }
+            } header: {
+                Text("Avvio")
+            }
 
             Section {
                 LabeledContent("Versione", value: "\(UpdateService.currentVersion) (\(UpdateService.currentBuild))")
@@ -173,6 +196,7 @@ struct DeveloperSettingsView: View {
     // MARK: Diagnostica
 
     private var storeDescription: String {
+        if let failure = StoreMode.localFailure { return "Solo memoria — archivio non apribile: \(failure)" }
         if StoreMode.isCloudKit { return "iCloud" }
         if let failure = StoreMode.cloudKitFailure { return "Locale (iCloud: \(failure))" }
         return "Locale"
@@ -183,8 +207,21 @@ struct DeveloperSettingsView: View {
             "CalenTask \(UpdateService.currentVersion) (\(UpdateService.currentBuild))",
             "Sistema: \(ProcessInfo.processInfo.operatingSystemVersionString)",
             "Archivio: \(storeDescription)",
+            "Avvio sicuro: \(LaunchGuard.isSafeMode ? "sì" : "no")",
             "Configurazione: \(UserDefaults.standard.string(forKey: AppConfiguration.storageKey) ?? "predefinita")",
         ].joined(separator: "\n")
+    }
+
+    /// Dimentica dimensioni della finestra, colonne e scelte di vista
+    /// (modalità del calendario, gruppi della barra laterale, pannello Oggi).
+    private func resetViews() {
+        LaunchGuard.resetWindowState()
+        let defaults = UserDefaults.standard
+        for key in ["calendarViewMode", "calendarDayMode", TodayPanel.storageKey,
+                    "sidebarShowsFavorites", "sidebarShowsProjects", "sidebarShowsLists", "sidebarShowsTags"] {
+            defaults.removeObject(forKey: key)
+        }
+        withAnimation(.dsQuick) { didResetViews = true }
     }
 
     private func copyDiagnostics() {

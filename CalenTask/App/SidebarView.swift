@@ -207,7 +207,7 @@ private struct SidebarContent: View {
             .listStyle(.sidebar)
 
             VStack(spacing: DS.s) {
-                if configuration.isEnabled(.sidebarMiniCalendar) {
+                if configuration.isEnabled(.sidebarMiniCalendar) && !LaunchGuard.isSafeMode {
                     sidebarMiniMonth(counts: stats.byDay)
                 }
                 sidebarAccountFooter
@@ -493,6 +493,9 @@ private struct SidebarContent: View {
 
     /// Stato EFFETTIVO dello store (A6): iCloud, iCloud in errore o locale.
     private var syncStatus: (label: String, color: Color) {
+        if StoreMode.localFailure != nil {
+            return ("Archivio non salvato", Color.red)
+        }
         if StoreMode.isCloudKit {
             return ("iCloud attivo", Color.green)
         }
