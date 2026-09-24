@@ -55,11 +55,17 @@ struct AgendaProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<AgendaEntry>) -> Void) {
-        let entry = AgendaEntry(date: .now, snapshot: SnapshotStore.load() ?? .empty)
-        // The app refreshes on every foreground exit; the hourly fallback
-        // keeps the "Oggi" framing honest across midnight.
-        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now)!
-        completion(Timeline(entries: [entry], policy: .after(next)))
+        let snapshot = SnapshotStore.load() ?? .empty
+        let calendar = Calendar.current
+        let now = Date.now
+        // #14 — una entry anche a mezzanotte: lì la view riconosce lo
+        // snapshot di ieri e smette di spacciarlo per "oggi".
+        var entries = [AgendaEntry(date: now, snapshot: snapshot)]
+        if let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
+            entries.append(AgendaEntry(date: midnight, snapshot: snapshot))
+        }
+        let next = calendar.date(byAdding: .hour, value: 1, to: now)!
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 }
 
@@ -85,7 +91,22 @@ struct AgendaWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: AgendaEntry
 
-    private var snapshot: WidgetSnapshot { entry.snapshot }
+    /// #14 — lo snapshot lo scrive l'app: dopo mezzanotte (o se non viene
+    /// aperta da giorni) è di un altro giorno. Niente elenco vecchio
+    /// spacciato per "oggi": data corrente e invito ad aprire l'app.
+    private var isStale: Bool {
+        !Calendar.current.isDate(entry.snapshot.generatedAt, inSameDayAs: entry.date)
+    }
+
+    private var snapshot: WidgetSnapshot {
+        guard isStale else { return entry.snapshot }
+        var current = entry.snapshot
+        current.items = []
+        current.dayLabel = entry.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        return current
+    }
+
+    private static let staleMessage = "Apri CalenTask per aggiornare"
 
     var body: some View {
         switch family {
@@ -113,7 +134,7 @@ struct AgendaWidgetView: View {
                         .lineLimit(3)
                 }
             } else {
-                Text("Tutto fatto ✨")
+                Text(isStale ? Self.staleMessage : "Tutto fatto ✨")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -132,7 +153,7 @@ struct AgendaWidgetView: View {
             }
             if snapshot.items.isEmpty {
                 Spacer()
-                Text("Niente in agenda oggi. Cattura un'idea ⚡️")
+                Text(isStale ? Self.staleMessage : "Niente in agenda oggi. Cattura un'idea ⚡️")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
