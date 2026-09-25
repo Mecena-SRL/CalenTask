@@ -34,7 +34,7 @@ struct QuickModeView: View {
     private var doneTasks: [TodoTask]
 
     private var recentlyDone: [TodoTask] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
+        let cutoff = Calendar.app.date(byAdding: .day, value: -7, to: .now) ?? .now
         var base = doneTasks.filter { ($0.completedAt ?? .distantPast) >= cutoff }
         base = WorkspaceScope.filter(base, raw: scopeRaw, id: \.workspaceID)
         return Array(base.prefix(20))

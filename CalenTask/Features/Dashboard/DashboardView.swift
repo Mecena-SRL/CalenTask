@@ -775,7 +775,7 @@ struct DashboardView: View {
     }
 
     private var timelineWindow: ClosedRange<Date> {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         return dayStamp...calendar.date(byAdding: .day, value: 30, to: dayStamp)!
     }
 
@@ -841,7 +841,7 @@ struct DashboardView: View {
     private static let loadBuckets = ["In ritardo", "Questa settimana", "Più avanti", "Senza data"]
 
     private var workloadSlices: [LoadSlice] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: dayStamp) ?? dayStamp
 
         func bucket(for task: TodoTask) -> String {
@@ -916,7 +916,7 @@ struct DashboardView: View {
     /// anche il "quando" arrivato (startAt ≤ oggi, stile Things) e gli
     /// arretrati — che NON vengono nascosti in una sezione punitiva.
     private var today: [TodoTask] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard let endOfToday = calendar.date(byAdding: .day, value: 1, to: dayStamp)
         else { return [] }
         return openTasks
@@ -943,7 +943,7 @@ struct DashboardView: View {
     }
 
     private var thisWeek: [TodoTask] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: dayStamp) else { return [] }
         return openTasks.filter { task in
             let dates = [task.startAt, task.dueAt, task.remindAt].compactMap(\.self)
@@ -953,7 +953,7 @@ struct DashboardView: View {
 
     /// Cose future: prossimi elementi datati dopo oggi.
     private var upcoming: [TodoTask] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: dayStamp) else { return [] }
         return openTasks
             .filter { task in
@@ -969,7 +969,7 @@ struct DashboardView: View {
     }
 
     private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: .now)
+        let hour = Calendar.app.component(.hour, from: .now)
         switch hour {
         case 5..<13: return "Buongiorno"
         case 13..<18: return "Buon pomeriggio"

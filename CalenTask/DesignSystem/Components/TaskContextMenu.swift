@@ -40,10 +40,10 @@ struct TaskMenuContent: View {
         Menu {
             Button("Oggi") { task.setDue(.now.startOfDay) }
             Button("Domani") {
-                task.setDue(Calendar.current.date(byAdding: .day, value: 1, to: .now.startOfDay))
+                task.setDue(Calendar.app.date(byAdding: .day, value: 1, to: .now.startOfDay))
             }
             Button("Tra una settimana") {
-                task.setDue(Calendar.current.date(byAdding: .day, value: 7, to: .now.startOfDay))
+                task.setDue(Calendar.app.date(byAdding: .day, value: 7, to: .now.startOfDay))
             }
             if task.dueAt != nil {
                 Divider()
