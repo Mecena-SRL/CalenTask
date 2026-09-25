@@ -35,16 +35,61 @@ nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
         case name, body, draft, prerelease, assets
         case htmlURL = "html_url"
     }
+
+    /// La release a rotazione del workflow Canary (tag `canary`).
+    var isCanary: Bool { tagName.lowercased().hasPrefix("canary") }
+}
+
+/// Da dove arrivano gli aggiornamenti.
+nonisolated enum UpdateChannel: String, CaseIterable, Identifiable, Sendable {
+    /// Solo le release ufficiali.
+    case stable
+    /// Anche le pre-release numerate (vX.Y.Z pubblicate come pre-release).
+    case beta
+    /// Anche la build automatica dell'ultimo commit su `main`.
+    case canary
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .stable: "Stabile"
+        case .beta: "Beta"
+        case .canary: "Canary"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .stable: "Solo le versioni ufficiali."
+        case .beta: "Anche le pre-release, qualche giorno prima delle ufficiali."
+        case .canary: "L'ultima build di main, a ogni modifica: la più fresca e la meno provata."
+        }
+    }
+
+    func accepts(_ release: GitHubRelease) -> Bool {
+        guard !release.draft else { return false }
+        switch self {
+        case .stable: return !release.prerelease
+        case .beta: return !release.isCanary
+        case .canary: return true
+        }
+    }
 }
 
 /// Un aggiornamento disponibile: la release più recente con un DMG.
 nonisolated struct AppUpdate: Equatable, Sendable {
     let version: String
+    /// Numero di build letto dal nome del DMG ("…-b128.dmg"), 0 se assente.
+    let build: Int
     let title: String
     let notes: String
     let isPrerelease: Bool
+    let isCanary: Bool
     let pageURL: URL
     let asset: GitHubRelease.Asset
+
+    var displayVersion: String { build > 0 ? "\(version) (build \(build))" : version }
 }
 
 nonisolated enum UpdateMath {
@@ -68,36 +113,58 @@ nonisolated enum UpdateMath {
         return false
     }
 
-    /// La release più recente più nuova della versione installata, con un
-    /// DMG allegato. Bozze escluse; pre-release solo se richieste.
+    /// Come `isNewer`, ma a parità di versione decide il numero di build.
+    static func isNewer(_ candidate: String, build: Int, than current: String, build currentBuild: Int) -> Bool {
+        if isNewer(candidate, than: current) { return true }
+        return !isNewer(current, than: candidate) && build > currentBuild
+    }
+
+    /// "CalenTask-0.1.0-b128.dmg" → ("0.1.0", 128); "CalenTask-v0.1.1.dmg" → ("v0.1.1", 0).
+    static func versionAndBuild(fromAssetName name: String) -> (version: String, build: Int) {
+        var stem = name.hasSuffix(".dmg") ? String(name.dropLast(4)) : name
+        if stem.hasPrefix("CalenTask-") { stem = String(stem.dropFirst("CalenTask-".count)) }
+        guard let dash = stem.range(of: "-b", options: .backwards),
+              let build = Int(stem[dash.upperBound...])
+        else { return (stem, 0) }
+        return (String(stem[..<dash.lowerBound]), build)
+    }
+
+    /// La release più recente del canale, più nuova dell'app installata e con
+    /// un DMG allegato. La versione viene dal tag, tranne per la Canary (tag
+    /// fisso) dove viene dal nome del DMG; la build sempre dal nome del DMG.
     static func latestUpdate(
-        in releases: [GitHubRelease], includePrereleases: Bool, currentVersion: String
+        in releases: [GitHubRelease], channel: UpdateChannel,
+        currentVersion: String, currentBuild: Int
     ) -> AppUpdate? {
         releases
-            .filter { !$0.draft && (includePrereleases || !$0.prerelease) }
-            .filter { isNewer($0.tagName, than: currentVersion) }
+            .filter(channel.accepts)
             .compactMap { release -> AppUpdate? in
                 guard let dmg = release.assets.first(where: { $0.name.lowercased().hasSuffix(".dmg") })
                 else { return nil }
-                let version = release.tagName.hasPrefix("v")
-                    ? String(release.tagName.dropFirst()) : release.tagName
+                let parsed = versionAndBuild(fromAssetName: dmg.name)
+                let raw = release.isCanary ? parsed.version : release.tagName
+                let version = raw.hasPrefix("v") ? String(raw.dropFirst()) : raw
                 return AppUpdate(
                     version: version,
+                    build: parsed.build,
                     title: release.name ?? release.tagName,
                     notes: release.body ?? "",
                     isPrerelease: release.prerelease,
+                    isCanary: release.isCanary,
                     pageURL: release.htmlURL,
                     asset: dmg
                 )
             }
-            .max { isNewer($1.version, than: $0.version) }
+            .filter { isNewer($0.version, build: $0.build, than: currentVersion, build: currentBuild) }
+            .max { isNewer($1.version, build: $1.build, than: $0.version, build: $0.build) }
     }
 }
 
 // MARK: Token (Portachiavi)
 
-/// Il token GitHub per il repository privato: nel Portachiavi, mai nelle
-/// preferenze.
+/// Token GitHub facoltativo (il repository è pubblico): alza il limite di
+/// richieste e serve solo se il repository torna privato. Nel Portachiavi,
+/// mai nelle preferenze.
 nonisolated enum GitHubTokenStore {
     private static let service = "it.mecena.CalenTask.github"
     private static let account = "releases"
@@ -147,7 +214,7 @@ nonisolated enum GitHubTokenStore {
 @Observable @MainActor
 final class UpdateService {
     static let shared = UpdateService()
-    static let includePrereleasesKey = "updates.includePrereleases"
+    static let channelKey = "updates.channel"
 
     static let repository = "Mecena-SRL/CalenTask"
 
@@ -183,7 +250,7 @@ final class UpdateService {
         }
     }
 
-    func checkForUpdates(includePrereleases: Bool) async {
+    func checkForUpdates(channel: UpdateChannel) async {
         guard !isBusy else { return }
         phase = .checking
         do {
@@ -197,8 +264,8 @@ final class UpdateService {
             let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
             lastCheckAt = .now
             if let update = UpdateMath.latestUpdate(
-                in: releases, includePrereleases: includePrereleases,
-                currentVersion: Self.currentVersion
+                in: releases, channel: channel,
+                currentVersion: Self.currentVersion, currentBuild: Int(Self.currentBuild) ?? 0
             ) {
                 phase = .available(update)
             } else {
@@ -291,8 +358,8 @@ nonisolated enum UpdateError: Error {
     var message: String {
         switch self {
         case .unauthorized: "Token GitHub non valido o scaduto."
-        case .forbidden: "GitHub ha rifiutato la richiesta (limite di richieste o permessi del token)."
-        case .notFound: "Repository non trovato: è privato, serve un token GitHub con accesso in lettura."
+        case .forbidden: "GitHub ha rifiutato la richiesta (limite di 60 richieste l'ora senza token, o permessi del token)."
+        case .notFound: "Repository non trovato: se è tornato privato serve un token GitHub con accesso in lettura."
         case .http(let code): "GitHub ha risposto con errore \(code)."
         case .mountFailed: "Impossibile aprire il DMG scaricato."
         case .appNotFound: "Nel DMG non c'è CalenTask.app."

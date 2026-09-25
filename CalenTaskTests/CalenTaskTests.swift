@@ -897,14 +897,22 @@ struct DomainModelTests {
         #expect(UpdateMath.isNewer("0.1", than: "0.0.5"))
         #expect(!UpdateMath.isNewer("v0.1.0", than: "0.1"))
         #expect(!UpdateMath.isNewer("0.0.9", than: "0.1.0"))
+        #expect(UpdateMath.isNewer("0.1.0", build: 130, than: "0.1.0", build: 120))
+        #expect(!UpdateMath.isNewer("0.1.0", build: 130, than: "0.1.1", build: 0))
+        let canaryAsset = UpdateMath.versionAndBuild(fromAssetName: "CalenTask-0.1.0-b128.dmg")
+        #expect(canaryAsset.version == "0.1.0" && canaryAsset.build == 128)
+        let stableAsset = UpdateMath.versionAndBuild(fromAssetName: "CalenTask-v0.1.1.dmg")
+        #expect(stableAsset.version == "v0.1.1" && stableAsset.build == 0)
 
-        func release(_ tag: String, prerelease: Bool = false, draft: Bool = false, dmg: Bool = true) -> String {
+        func release(_ tag: String, asset: String? = nil, prerelease: Bool = false, draft: Bool = false, dmg: Bool = true) -> String {
+            let name = asset ?? "CalenTask-\(tag).dmg"
             let assets = dmg
-                ? #"[{"name":"CalenTask-\#(tag).dmg","size":1,"url":"https://api.github.com/a/1","browser_download_url":"https://github.com/d/1"}]"#
+                ? #"[{"name":"\#(name)","size":1,"url":"https://api.github.com/a/1","browser_download_url":"https://github.com/d/1"}]"#
                 : "[]"
             return #"{"tag_name":"\#(tag)","name":null,"body":"note","draft":\#(draft),"prerelease":\#(prerelease),"html_url":"https://github.com/r/\#(tag)","assets":\#(assets)}"#
         }
         let json = "[" + [
+            release("canary", asset: "CalenTask-0.1.2-b140.dmg", prerelease: true),
             release("v0.2.0", draft: true),
             release("v0.1.2", prerelease: true),
             release("v0.1.1"),
@@ -913,15 +921,26 @@ struct DomainModelTests {
         ].joined(separator: ",") + "]"
         let releases = try JSONDecoder().decode([GitHubRelease].self, from: Data(json.utf8))
 
-        let stable = UpdateMath.latestUpdate(in: releases, includePrereleases: false, currentVersion: "0.1.0")
+        func latest(_ channel: UpdateChannel, _ version: String, build: Int = 0) -> AppUpdate? {
+            UpdateMath.latestUpdate(in: releases, channel: channel, currentVersion: version, currentBuild: build)
+        }
+
+        let stable = latest(.stable, "0.1.0")
         #expect(stable?.version == "0.1.1")
         #expect(stable?.asset.name == "CalenTask-v0.1.1.dmg")
 
-        let beta = UpdateMath.latestUpdate(in: releases, includePrereleases: true, currentVersion: "0.1.0")
+        let beta = latest(.beta, "0.1.0")
         #expect(beta?.version == "0.1.2")
         #expect(beta?.isPrerelease == true)
+        #expect(beta?.isCanary == false)
 
-        #expect(UpdateMath.latestUpdate(in: releases, includePrereleases: true, currentVersion: "0.1.2") == nil)
+        // La Canary vince a parità di versione grazie alla build.
+        let canary = latest(.canary, "0.1.0")
+        #expect(canary?.isCanary == true)
+        #expect(canary?.displayVersion == "0.1.2 (build 140)")
+
+        #expect(latest(.beta, "0.1.2") == nil)
+        #expect(latest(.canary, "0.1.2", build: 140) == nil)
     }
 
     /// Impostazioni: la ricerca trova pagine, funzioni e preferenze (senza

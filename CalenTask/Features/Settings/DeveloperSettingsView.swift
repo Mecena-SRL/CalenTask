@@ -9,7 +9,7 @@ import UIKit
 /// Impostazioni › Sviluppatore: aggiornamenti dalle release di GitHub
 /// (anche pre-release) e le informazioni utili per un report di errore.
 struct DeveloperSettingsView: View {
-    @AppStorage(UpdateService.includePrereleasesKey) private var includePrereleases = false
+    @AppStorage(UpdateService.channelKey) private var channel: UpdateChannel = .stable
     @State private var updates = UpdateService.shared
     @State private var tokenDraft = ""
     /// Solo un segno nelle preferenze: il Portachiavi si legge al controllo
@@ -74,16 +74,18 @@ struct DeveloperSettingsView: View {
     #if os(macOS)
     private var updatesSection: some View {
         Section {
-            SettingsToggleRow(
-                title: "Includi le pre-release",
-                detail: "Ricevi anche le versioni di prova, prima che diventino ufficiali.",
-                systemImage: "flask", tint: .orange,
-                isOn: $includePrereleases
-            )
+            Picker(selection: $channel) {
+                ForEach(UpdateChannel.allCases) { channel in
+                    Text(channel.title).tag(channel)
+                }
+            } label: {
+                DSFieldRow(label: "Canale", systemImage: "flask", tint: .orange,
+                           value: channel.detail) { EmptyView() }
+            }
 
             HStack {
                 Button {
-                    Task { await updates.checkForUpdates(includePrereleases: includePrereleases) }
+                    Task { await updates.checkForUpdates(channel: channel) }
                 } label: {
                     Label("Controlla aggiornamenti", systemImage: "arrow.triangle.2.circlepath")
                 }
@@ -100,7 +102,7 @@ struct DeveloperSettingsView: View {
         } header: {
             Text("Aggiornamenti")
         } footer: {
-            Text("Le versioni arrivano dalle release di GitHub. L'app scarica il DMG, si sostituisce e si riavvia; se non può (per esempio senza permessi sulla cartella Applicazioni) apre il DMG da trascinare a mano.")
+            Text("Le versioni arrivano dalle release di GitHub; la Canary si ricompila da sola a ogni modifica di main. L'app scarica il DMG, si sostituisce e si riavvia; se non può (per esempio senza permessi sulla cartella Applicazioni) apre il DMG da trascinare a mano.")
         }
     }
 
@@ -112,16 +114,16 @@ struct DeveloperSettingsView: View {
         case .checking:
             ProgressRow(text: "Controllo in corso…")
         case .upToDate:
-            Label("CalenTask è aggiornata (\(UpdateService.currentVersion)).", systemImage: "checkmark.seal.fill")
+            Label("CalenTask è aggiornata (\(UpdateService.currentVersion), canale \(channel.title)).", systemImage: "checkmark.seal.fill")
                 .foregroundStyle(.green)
         case .available(let update):
             VStack(alignment: .leading, spacing: DS.s) {
                 HStack(spacing: DS.s) {
-                    Label("Disponibile la \(update.version)", systemImage: "arrow.down.circle.fill")
+                    Label("Disponibile la \(update.displayVersion)", systemImage: "arrow.down.circle.fill")
                         .font(.dsMeta.weight(.semibold))
                         .foregroundStyle(Color.accentColor)
                     if update.isPrerelease {
-                        Text("pre-release")
+                        Text(update.isCanary ? "canary" : "pre-release")
                             .font(.system(size: 10, weight: .semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -147,9 +149,9 @@ struct DeveloperSettingsView: View {
             }
             .padding(.vertical, DS.xs)
         case .downloading(let update):
-            ProgressRow(text: "Scarico la \(update.version)…")
+            ProgressRow(text: "Scarico la \(update.displayVersion)…")
         case .installing(let update):
-            ProgressRow(text: "Installo la \(update.version): l'app si riavvierà.")
+            ProgressRow(text: "Installo la \(update.displayVersion): l'app si riavvierà.")
         case .manualInstall(let dmg):
             VStack(alignment: .leading, spacing: DS.xs) {
                 Label("DMG scaricato e aperto.", systemImage: "externaldrive.fill")
@@ -186,9 +188,9 @@ struct DeveloperSettingsView: View {
                 }
             }
         } header: {
-            Text("Accesso a GitHub")
+            Text("Accesso a GitHub (facoltativo)")
         } footer: {
-            Text("Il repository è privato: serve un token GitHub (fine-grained) con permesso \"Contents: Read-only\" sul solo repository CalenTask. Resta nel Portachiavi di questo Mac.")
+            Text("Il repository è pubblico: il token non serve. Utile solo oltre le 60 richieste l'ora o se il repository torna privato (fine-grained, \"Contents: Read-only\"). Resta nel Portachiavi di questo Mac.")
         }
     }
     #endif

@@ -1,0 +1,77 @@
+name: Canary
+
+# A ogni push su main: DMG di prova (firma ad-hoc, come il workflow DMG)
+# pubblicato come pre-release a rotazione con tag `canary`, sostituita a ogni
+# build. L'app la offre col canale "Canary" (Impostazioni › Sviluppatore).
+# Versione = ultimo tag vX.Y.Z, build = numero di commit di main: il DMG si
+# chiama CalenTask-<versione>-b<build>.dmg e l'app confronta anche la build.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Canary (macOS, firma ad-hoc)
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Versione
+        run: |
+          set -euo pipefail
+          TAG=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)
+          VERSION="${TAG#v}"
+          echo "VERSION=${VERSION:-0.0.0}" >> "$GITHUB_ENV"
+          echo "BUILD=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+      - name: Build Release
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalenTask.xcodeproj \
+            -scheme CalenTask \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            | tee xcodebuild-canary.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-canary.log
+      - name: Firma ad-hoc e DMG
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/CalenTask.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p dmg
+          cp -R "$APP" dmg/
+          ln -s /Applications dmg/Applications
+          NAME="CalenTask-$VERSION-b$BUILD"
+          hdiutil create -volname "CalenTask" -srcfolder dmg -ov -format UDZO "$NAME.dmg"
+          echo "DMG_NAME=$NAME" >> "$GITHUB_ENV"
+      - name: Pre-release canary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Build automatica dell'ultimo commit di main: **la meno provata**. Firma ad-hoc (niente iCloud né widget)."
+            echo ""
+            echo "Ultime modifiche:"
+            git log -8 --no-merges --format='- %s (%h)'
+            echo ""
+            echo "Commit: $GITHUB_SHA"
+          } > notes.md
+          gh release delete canary --cleanup-tag --yes 2>/dev/null || true
+          gh release create canary "$DMG_NAME.dmg" \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "CalenTask Canary $VERSION (build $BUILD)" --notes-file notes.md
