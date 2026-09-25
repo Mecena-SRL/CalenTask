@@ -33,7 +33,9 @@ jobs:
       - name: Errori di compilazione
         if: failure()
         run: |
-          grep -n -B2 -A4 -E "error|: note:" xcodebuild-test.log | head -300 || true
+          grep -n -B2 -A4 -E "error|: note:|Stack dump|Assertion|Please submit" xcodebuild-test.log | head -300 || true
+          echo "--- ultime righe del log ---"
+          grep -v -E "^\s*(cd|export|builtin-|/Applications/Xcode)" xcodebuild-test.log | tail -150
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -59,7 +61,9 @@ jobs:
       - name: Errori di compilazione
         if: failure()
         run: |
-          grep -n -B2 -A4 -E "error|: note:" xcodebuild-ios.log | head -300 || true
+          grep -n -B2 -A4 -E "error|: note:|Stack dump|Assertion|Please submit" xcodebuild-ios.log | head -300 || true
+          echo "--- ultime righe del log ---"
+          grep -v -E "^\s*(cd|export|builtin-|/Applications/Xcode)" xcodebuild-ios.log | tail -150
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
