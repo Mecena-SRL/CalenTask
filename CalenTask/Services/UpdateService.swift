@@ -306,13 +306,16 @@ nonisolated enum UpdateError: Error {
 nonisolated final class GitHubRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession, task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
-    ) async -> URLRequest? {
+        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        // Variante a completion handler: quella `async` manda in crash
+        // swift-frontend 6.3 (thunk Objective-C).
         var redirected = request
         if redirected.url?.host != "api.github.com" {
             redirected.setValue(nil, forHTTPHeaderField: "Authorization")
         }
-        return redirected
+        completionHandler(redirected)
     }
 }
 
