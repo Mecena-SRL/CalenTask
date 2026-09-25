@@ -118,7 +118,7 @@ struct QuickCaptureView: View {
     }
 
     private static var defaultReminder: Date {
-        Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        Calendar.app.date(byAdding: .hour, value: 1, to: .now) ?? .now
     }
 
     private func save() {

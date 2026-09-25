@@ -16,7 +16,7 @@ nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
         let url: URL
         let browserDownloadURL: URL
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
             case name, size, url
             case browserDownloadURL = "browser_download_url"
         }
@@ -30,7 +30,7 @@ nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
     let htmlURL: URL
     let assets: [Asset]
 
-    enum CodingKeys: String, CodingKey {
+    nonisolated enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case name, body, draft, prerelease, assets
         case htmlURL = "html_url"
@@ -370,14 +370,14 @@ nonisolated enum UpdateError: Error {
 
 /// Gli asset dei repository privati rimandano a un URL firmato: il token
 /// NON va inoltrato fuori da GitHub (lo storage rifiuterebbe la richiesta).
-/// Variante con completion handler: quella `async` manda in crash il
-/// compilatore (Xcode 26.6) mentre genera il thunk Objective-C.
 nonisolated final class GitHubRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession, task: URLSessionTask,
         willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
         completionHandler: @escaping @Sendable (URLRequest?) -> Void
     ) {
+        // Variante a completion handler: quella `async` manda in crash
+        // swift-frontend 6.3 (thunk Objective-C).
         var redirected = request
         if redirected.url?.host != "api.github.com" {
             redirected.setValue(nil, forHTTPHeaderField: "Authorization")

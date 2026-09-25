@@ -10,7 +10,7 @@ struct DateChipPicker: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.s) {
                 chip("Oggi", target: Date.now.startOfDay)
-                chip("Domani", target: Calendar.current.date(byAdding: .day, value: 1, to: .now.startOfDay))
+                chip("Domani", target: Calendar.app.date(byAdding: .day, value: 1, to: .now.startOfDay))
                 chip("Settimana pross.", target: nextMonday)
                 customChip
                 if date != nil {
@@ -37,7 +37,7 @@ struct DateChipPicker: View {
     }
 
     private var nextMonday: Date? {
-        Calendar.current.nextDate(
+        Calendar.app.nextDate(
             after: .now,
             matching: DateComponents(weekday: 2),
             matchingPolicy: .nextTime
@@ -46,7 +46,7 @@ struct DateChipPicker: View {
 
     private func chip(_ title: String, target: Date?) -> some View {
         let isSelected = target != nil && date != nil
-            && Calendar.current.isDate(date!, inSameDayAs: target!)
+            && Calendar.app.isDate(date!, inSameDayAs: target!)
         return Button {
             date = target
         } label: {
@@ -82,7 +82,7 @@ struct DateChipPicker: View {
 
     private var isCustomSelected: Bool {
         guard let date else { return false }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let isQuick = calendar.isDateInToday(date) || calendar.isDateInTomorrow(date)
             || (nextMonday.map { calendar.isDate(date, inSameDayAs: $0) } ?? false)
         return !isQuick

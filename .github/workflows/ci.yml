@@ -30,17 +30,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild-test.log | grep -E "error:|warning: .*CalenTask/|Test (Suite|Case)|✔|✘|\*\* (TEST|BUILD)" || true
           grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log
-      - name: Errori di compilazione
+
+      - name: Diagnostica del fallimento
         if: failure()
         run: |
-          grep -n -B2 -A4 -E "error|: note:|Stack dump|Assertion|Please submit" xcodebuild-test.log | head -300 || true
-          echo "--- ultime righe del log ---"
-          grep -v -E "^\s*(cd|export|builtin-|/Applications/Xcode)" xcodebuild-test.log | tail -150
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: xcodebuild-test-log
-          path: xcodebuild-test.log
+          # Crash del compilatore e errori non hanno sempre "error:": mostra il contesto.
+          grep -n -B2 -A25 -E "error:|Stack dump|Assertion failed|Please submit a bug report|failed with a nonzero exit code" xcodebuild-test.log | head -300 || true
+          echo "--- ultime 80 righe ---"
+          tail -80 xcodebuild-test.log || true
 
   ios-build:
     name: Build (iOS Simulator)
@@ -58,14 +55,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild-ios.log | grep -E "error:|\*\* BUILD" || true
           grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-ios.log
-      - name: Errori di compilazione
+
+      - name: Diagnostica del fallimento
         if: failure()
         run: |
-          grep -n -B2 -A4 -E "error|: note:|Stack dump|Assertion|Please submit" xcodebuild-ios.log | head -300 || true
-          echo "--- ultime righe del log ---"
-          grep -v -E "^\s*(cd|export|builtin-|/Applications/Xcode)" xcodebuild-ios.log | tail -150
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: xcodebuild-ios-log
-          path: xcodebuild-ios.log
+          # Crash del compilatore e errori non hanno sempre "error:": mostra il contesto.
+          grep -n -B2 -A25 -E "error:|Stack dump|Assertion failed|Please submit a bug report|failed with a nonzero exit code" xcodebuild-ios.log | head -300 || true
+          echo "--- ultime 80 righe ---"
+          tail -80 xcodebuild-ios.log || true

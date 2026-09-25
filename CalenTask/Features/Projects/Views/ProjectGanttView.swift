@@ -63,7 +63,7 @@ struct ProjectGanttView: View {
         let critical = criticalPathIDs(rows: rows)
         // Righe vuote in fondo: c'è sempre spazio per il doppio clic "crea".
         let gridHeight = CGFloat(rows.count + 3) * rowHeight
-        let todayOffset = Calendar.current.dateComponents(
+        let todayOffset = Calendar.app.dateComponents(
             [.day], from: range.lowerBound, to: Date.now.startOfDay
         ).day ?? 0
         // Oggi entra con qualche giorno di contesto a sinistra.
@@ -222,7 +222,7 @@ struct ProjectGanttView: View {
 
     /// G15 — lunedì rosso, venerdì verde: ognuno il suo calendario mentale.
     private var weekdayColorsMenu: some View {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let symbols = calendar.standaloneWeekdaySymbols  // [dom, lun, …]
         return Menu {
             ForEach(1...7, id: \.self) { weekday in
@@ -554,7 +554,7 @@ struct ProjectGanttView: View {
         if !isPhase {
             let start = (day ?? .now).startOfDay
             task.startAt = start
-            task.dueAt = Calendar.current.date(byAdding: .day, value: 2, to: start)
+            task.dueAt = Calendar.app.date(byAdding: .day, value: 2, to: start)
         }
         modelContext.insert(task)
         task.project = project
@@ -581,7 +581,7 @@ struct ProjectGanttView: View {
             .gesture(
                 SpatialTapGesture(count: 2)
                     .onEnded { value in
-                        let day = Calendar.current.date(
+                        let day = Calendar.app.date(
                             byAdding: .day,
                             value: Int(value.location.x / dayWidth),
                             to: range.lowerBound
@@ -743,7 +743,7 @@ struct ProjectGanttView: View {
     }
 
     private func dateRange(for rows: [GanttRow]) -> ClosedRange<Date> {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let today = Date.now.startOfDay
         let spans = rows.compactMap { barSpan(for: $0) }
         let minDate = spans.map(\.start).min() ?? today
@@ -754,7 +754,7 @@ struct ProjectGanttView: View {
     }
 
     private func dayCount(in range: ClosedRange<Date>) -> Int {
-        (Calendar.current.dateComponents([.day], from: range.lowerBound, to: range.upperBound).day ?? 30) + 1
+        (Calendar.app.dateComponents([.day], from: range.lowerBound, to: range.upperBound).day ?? 30) + 1
     }
 
     /// The dated span a bar covers: explicit dates for tasks, the children's
@@ -786,7 +786,7 @@ struct ProjectGanttView: View {
         guard let index = rowIndex[taskID], rows.indices.contains(index),
               let span = barSpan(for: rows[index])
         else { return nil }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let startDays = calendar.dateComponents([.day], from: range.lowerBound, to: span.start).day ?? 0
         let lengthDays = (calendar.dateComponents([.day], from: span.start, to: span.end).day ?? 0) + 1
         let barHeight: CGFloat = rows[index].isPhase ? 10 : (complexRows ? 26 : 20)
@@ -815,7 +815,7 @@ struct ProjectGanttView: View {
         var durations: [UUID: Int] = [:]
         for row in rows where !row.isPhase && !row.task.isDone {
             guard let span = taskSpan(row.task) else { continue }
-            let days = (Calendar.current.dateComponents([.day], from: span.start, to: span.end).day ?? 0) + 1
+            let days = (Calendar.app.dateComponents([.day], from: span.start, to: span.end).day ?? 0) + 1
             durations[row.task.id] = days
         }
 
@@ -869,7 +869,7 @@ struct ProjectGanttView: View {
 
     private func shift(_ task: TodoTask, byDays days: Int) {
         guard days != 0 else { return }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         func moved(_ date: Date?) -> Date? {
             date.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
         }
@@ -891,7 +891,7 @@ struct ProjectGanttView: View {
     /// finiva prima di iniziare).
     private func resize(_ task: TodoTask, byDays days: Int) {
         guard days != 0, !task.isPhase else { return }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         if let end = task.endAt {
             task.setEnd(calendar.date(byAdding: .day, value: days, to: end) ?? end)
         } else if let base = task.dueAt ?? task.startAt {
@@ -904,7 +904,7 @@ struct ProjectGanttView: View {
     /// G14 — la maniglia sinistra sposta l'INIZIO (la fine resta ferma).
     private func resizeStart(_ task: TodoTask, byDays days: Int) {
         guard days != 0, !task.isPhase else { return }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard let base = task.startAt ?? task.dueAt?.startOfDay else { return }
         var newStart = calendar.date(byAdding: .day, value: days, to: base) ?? base
         if let limit = task.endAt ?? task.dueAt ?? task.startAt {
@@ -982,7 +982,7 @@ private struct GanttHeader: View {
     }
 
     private var monthBands: [MonthBand] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         var bands: [MonthBand] = []
         var offset = 0
         while offset < days {
@@ -1001,7 +1001,7 @@ private struct GanttHeader: View {
     }
 
     var body: some View {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         VStack(spacing: 0) {
             // Fascia dei mesi. G11 — il confine di mese è ben marcato.
             HStack(spacing: 0) {
@@ -1065,7 +1065,7 @@ private struct GanttGridBackground: View {
 
     var body: some View {
         Canvas { context, size in
-            let calendar = Calendar.current
+            let calendar = Calendar.app
             for offset in 0..<days {
                 let day = calendar.date(byAdding: .day, value: offset, to: range.lowerBound)!
                 let x = CGFloat(offset) * dayWidth

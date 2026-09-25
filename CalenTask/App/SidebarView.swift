@@ -380,11 +380,11 @@ private struct SidebarContent: View {
 
     /// Pallini = giornate con attività (inizio o scadenza), nello scope attivo.
     private func sidebarMiniMonth(counts: [Date: Int]) -> some View {
-        let isCurrentMonth = Calendar.current.isDate(miniMonth, equalTo: .now, toGranularity: .month)
+        let isCurrentMonth = Calendar.app.isDate(miniMonth, equalTo: .now, toGranularity: .month)
         return VStack(alignment: .leading, spacing: DS.xs) {
             HStack(spacing: DS.xs) {
                 Text(miniMonth.formatted(
-                    Calendar.current.isDate(miniMonth, equalTo: .now, toGranularity: .year)
+                    Calendar.app.isDate(miniMonth, equalTo: .now, toGranularity: .year)
                         ? .dateTime.month(.wide)
                         : .dateTime.month(.wide).year()
                 ).capitalized)
@@ -433,7 +433,7 @@ private struct SidebarContent: View {
 
     private func shiftMiniMonth(_ delta: Int) {
         withAnimation(.dsQuick) {
-            miniMonth = Calendar.current.date(
+            miniMonth = Calendar.app.date(
                 byAdding: .month, value: delta, to: miniMonth
             ) ?? miniMonth
         }
