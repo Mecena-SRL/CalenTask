@@ -9,14 +9,14 @@ import AppKit
 
 /// Una release come la restituisce l'API di GitHub (solo i campi usati).
 nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
-    struct Asset: Decodable, Equatable, Sendable {
+    nonisolated struct Asset: Decodable, Equatable, Sendable {
         let name: String
         let size: Int
         /// URL dell'API: con un token scarica anche dai repository privati.
         let url: URL
         let browserDownloadURL: URL
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
             case name, size, url
             case browserDownloadURL = "browser_download_url"
         }
@@ -30,7 +30,7 @@ nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
     let htmlURL: URL
     let assets: [Asset]
 
-    enum CodingKeys: String, CodingKey {
+    nonisolated enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case name, body, draft, prerelease, assets
         case htmlURL = "html_url"
