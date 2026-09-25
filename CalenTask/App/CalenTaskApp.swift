@@ -21,6 +21,9 @@ enum StoreMode {
     /// #17 — perché CloudKit non si è aperto (entitlement presente ma
     /// container in errore): mostrato in Impostazioni › Account.
     static fileprivate(set) var cloudKitFailure: String?
+    /// Neanche l'archivio locale si è aperto: si lavora in memoria (niente
+    /// viene salvato) invece di chiudere l'app all'avvio.
+    static fileprivate(set) var localFailure: String?
 }
 
 private func processHasCloudKitEntitlement() -> Bool {
@@ -95,7 +98,17 @@ struct CalenTaskApp: App {
                 configurations: [localConfiguration]
             )
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Prima: fatalError, cioè un'app che non parte. Ora si apre in
+            // memoria, lo dice (Impostazioni › Sviluppatore) e non tocca il
+            // file su disco, che resta lì per il recupero.
+            StoreMode.localFailure = String(describing: error)
+            Log.store.fault("Archivio locale non apribile, uso la memoria: \(String(describing: error), privacy: .public)")
+            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                return try ModelContainer(for: schema, configurations: [memory])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
     }()
 

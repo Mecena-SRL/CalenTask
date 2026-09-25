@@ -24,6 +24,7 @@ struct AppShellView: View {
     /// QUI, sulla finestra intera, e applicato fuori dal layout — vedi
     /// `updateWidthClass`.
     @State private var widthClass = ShellWidthClass()
+    @State private var safeModeDismissed = false
 
     var body: some View {
         @Bindable var router = router
@@ -62,6 +63,11 @@ struct AppShellView: View {
         }
         .animation(.dsQuick, value: router.isQuickCaptureOpen)
         .animation(.dsQuick, value: showTaskPopup)
+        .overlay(alignment: .bottom) {
+            if LaunchGuard.isSafeMode && !safeModeDismissed {
+                safeModeBanner
+            }
+        }
         #else
         .sheet(isPresented: $router.isQuickCaptureOpen) {
             captureSheet
@@ -117,6 +123,9 @@ struct AppShellView: View {
                 didShowWelcome = true
                 showsWelcome = true
             }
+            // Arrivata a regime: il prossimo avvio non sarà "sicuro".
+            try? await Task.sleep(for: .seconds(20))
+            LaunchGuard.markLaunchCompleted()
         }
         .onChange(of: configurationRaw) { _, _ in
             // A module can disappear while its page is open. Return to a
@@ -254,10 +263,38 @@ struct AppShellView: View {
         .transition(.opacity)
     }
 
-    /// C'è un'attività da aprire ma manca lo spazio per la colonna destra.
+    /// C'è un'attività da aprire ma manca lo spazio per la colonna destra
+    /// (o siamo in avvio sicuro, che la colonna non la usa).
     private var showTaskPopup: Bool {
-        widthClass.isMeasured && !widthClass.fitsTaskInspector
+        widthClass.isMeasured && (!widthClass.fitsTaskInspector || LaunchGuard.isSafeMode)
             && router.taskForInspector != nil
+    }
+
+    /// Avviso dell'avvio sicuro, in basso: dice cosa è successo e cosa manca.
+    private var safeModeBanner: some View {
+        HStack(spacing: DS.m) {
+            Image(systemName: "stethoscope")
+                .font(.title3)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Avvio sicuro")
+                    .font(.dsMeta.weight(.semibold))
+                Text("L'ultimo avvio si è interrotto: finestra ripristinata, pannello destro e mini-calendario spenti per questa sessione. Al prossimo avvio tutto torna normale.")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button("Ok") { withAnimation(.dsQuick) { safeModeDismissed = true } }
+        }
+        .padding(DS.m)
+        .frame(maxWidth: 560)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.large))
+        .overlay {
+            RoundedRectangle(cornerRadius: DS.Radius.large)
+                .strokeBorder(DSColor.hairline)
+        }
+        .padding(DS.l)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     /// macOS: popup modale centrato con sfondo cliccabile (clic fuori → chiude)
@@ -353,12 +390,13 @@ private struct ShellSplitView: View {
     /// …ma appare solo se la finestra ha davvero spazio (27"/32").
     private var canShowTodayPanel: Bool {
         configuration.isEnabled(.todayInspector) && widthClass.fitsTodayPanel
+            && !LaunchGuard.isSafeMode
     }
 
     /// Largo abbastanza da reggere il dettaglio come colonna destra. Sotto
     /// questa soglia (ma ancora regular) l'attività si apre in un popup.
     private var canShowTaskInspector: Bool {
-        widthClass.fitsTaskInspector
+        widthClass.fitsTaskInspector && !LaunchGuard.isSafeMode
     }
 
     /// L'attività è da mostrare nell'inspector (c'è e c'è spazio).
