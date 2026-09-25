@@ -17,7 +17,7 @@ extension SavedViewFilters {
         }
         if let days = dueWithinDays {
             guard let dueAt = task.dueAt,
-                  let limit = Calendar.current.date(
+                  let limit = Calendar.app.date(
                     byAdding: .day, value: days + 1, to: .now.startOfDay)
             else { return false }
             if dueAt >= limit { return false }

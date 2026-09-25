@@ -117,7 +117,7 @@ struct ProjectSummaryView: View {
                     .font(.dsMeta.weight(.semibold))
                 HStack(spacing: DS.l) {
                     if let lastDeadline {
-                        let days = Calendar.current.dateComponents(
+                        let days = Calendar.app.dateComponents(
                             [.day], from: .now, to: lastDeadline
                         ).day ?? 0
                         Label(
@@ -330,7 +330,7 @@ struct ProjectSummaryView: View {
     }
 
     private var phaseStats: [PhaseStat] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         return project.phaseTasks.compactMap { phase in
             let children = phase.liveSubtasks.filter { !$0.isTemplate }
             guard !children.isEmpty else { return nil }
@@ -393,7 +393,7 @@ struct ProjectSummaryView: View {
     }
 
     private var completionPoints: [WeekPoint] {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let start = calendar.date(byAdding: .weekOfYear, value: -7, to: .now.startOfDay)!
         var buckets: [Date: Int] = [:]
         for task in doneTasks where task.updatedAt >= start {

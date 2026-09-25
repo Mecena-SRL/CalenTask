@@ -20,7 +20,7 @@ enum TodayPanel {
 struct TodayPanelView: View {
     @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
     /// Si aggiorna a mezzanotte: il pannello non resta su "ieri".
-    @State private var today = Calendar.current.startOfDay(for: .now)
+    @State private var today = Calendar.app.startOfDay(for: .now)
 
     /// La X c'è solo dove esiste un modo per riaprire (menu Vista, macOS).
     var onClose: (() -> Void)?
@@ -30,7 +30,7 @@ struct TodayPanelView: View {
             workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), today: today, onClose: onClose
         )
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
-            today = Calendar.current.startOfDay(for: .now)
+            today = Calendar.app.startOfDay(for: .now)
         }
     }
 }
@@ -45,7 +45,7 @@ private struct TodayPanelContent: View {
     private let onClose: (() -> Void)?
 
     init(workspaceID: UUID?, today: Date, onClose: (() -> Void)?) {
-        let dayAfterTomorrow = Calendar.current.date(byAdding: .day, value: 2, to: today) ?? today
+        let dayAfterTomorrow = Calendar.app.date(byAdding: .day, value: 2, to: today) ?? today
         _starting = Query(filter: TodoTask.openStartingPredicate(
             from: today, to: dayAfterTomorrow, workspaceID: workspaceID
         ))

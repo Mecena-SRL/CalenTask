@@ -206,7 +206,7 @@ struct DSDateField: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.s) {
                 chip("Oggi", day: .now)
-                chip("Domani", day: Calendar.current.date(byAdding: .day, value: 1, to: .now))
+                chip("Domani", day: Calendar.app.date(byAdding: .day, value: 1, to: .now))
                 chip("Weekend", day: nextWeekday(7))   // sabato
                 chip("Lun. prossimo", day: nextWeekday(2))
             }
@@ -215,7 +215,7 @@ struct DSDateField: View {
 
     private func chip(_ title: String, day: Date?) -> some View {
         let isSelected = day != nil && date != nil
-            && Calendar.current.isDate(date!, inSameDayAs: day!)
+            && Calendar.app.isDate(date!, inSameDayAs: day!)
         return Button {
             guard let day else { return }
             withAnimation(.dsQuick) { date = preservingTime(on: day) }
@@ -232,7 +232,7 @@ struct DSDateField: View {
 
     /// Changing the day keeps the chosen time of day.
     private func preservingTime(on day: Date) -> Date {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard includesTime, let date else { return day.startOfDay }
         let time = calendar.dateComponents([.hour, .minute], from: date)
         return calendar.date(
@@ -241,7 +241,7 @@ struct DSDateField: View {
     }
 
     private func nextWeekday(_ weekday: Int) -> Date? {
-        Calendar.current.nextDate(
+        Calendar.app.nextDate(
             after: .now,
             matching: DateComponents(weekday: weekday),
             matchingPolicy: .nextTime
@@ -256,8 +256,8 @@ struct DSDateField: View {
 
     private var defaultValue: Date {
         if includesTime {
-            let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-            return Calendar.current.date(bySetting: .minute, value: 0, of: next) ?? next
+            let next = Calendar.app.date(byAdding: .hour, value: 1, to: .now) ?? .now
+            return Calendar.app.date(bySetting: .minute, value: 0, of: next) ?? next
         }
         return .now.startOfDay
     }

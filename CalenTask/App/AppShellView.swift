@@ -192,7 +192,7 @@ struct AppShellView: View {
 
     /// D67 — i numeri del digest si calcolano sul giorno in cui suonerà (8:00).
     private func scheduleDigest() {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         var fireDay = calendar.startOfDay(for: .now)
         if let eight = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: .now),
            eight <= .now,
