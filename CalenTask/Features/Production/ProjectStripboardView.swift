@@ -263,7 +263,7 @@ struct ProjectStripboardView: View {
 
     private func createShootDay() {
         // Il giorno nuovo parte dal giorno dopo l'ultimo, call 8:00 → wrap 19:00.
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let lastDay = shootDays.compactMap(\.startAt).max()
         let base = lastDay.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
             ?? .now
