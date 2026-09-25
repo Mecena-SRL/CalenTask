@@ -31,6 +31,14 @@ jobs:
             | tee xcodebuild-test.log | grep -E "error:|warning: .*CalenTask/|Test (Suite|Case)|✔|✘|\*\* (TEST|BUILD)" || true
           grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log
 
+      - name: Diagnostica del fallimento
+        if: failure()
+        run: |
+          # Crash del compilatore e errori non hanno sempre "error:": mostra il contesto.
+          grep -n -B2 -A25 -E "error:|Stack dump|Assertion failed|Please submit a bug report|failed with a nonzero exit code" xcodebuild-test.log | head -300 || true
+          echo "--- ultime 80 righe ---"
+          tail -80 xcodebuild-test.log || true
+
   ios-build:
     name: Build (iOS Simulator)
     runs-on: macos-26
@@ -47,3 +55,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee xcodebuild-ios.log | grep -E "error:|\*\* BUILD" || true
           grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-ios.log
+
+      - name: Diagnostica del fallimento
+        if: failure()
+        run: |
+          # Crash del compilatore e errori non hanno sempre "error:": mostra il contesto.
+          grep -n -B2 -A25 -E "error:|Stack dump|Assertion failed|Please submit a bug report|failed with a nonzero exit code" xcodebuild-ios.log | head -300 || true
+          echo "--- ultime 80 righe ---"
+          tail -80 xcodebuild-ios.log || true
