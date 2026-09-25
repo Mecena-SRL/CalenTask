@@ -5,7 +5,8 @@ name: DMG
 # Si lancia a mano da Actions › DMG › Run workflow; l'artifact resta 14 giorni.
 # Con `release_tag` (es. v0.0.1) l'app prende quella versione e il DMG viene
 # allegato a una release BOZZA con quel tag (da pubblicare a mano); se la
-# bozza esiste già viene aggiornata.
+# bozza esiste già viene aggiornata. La build è il numero di commit, come
+# nella Canary, così l'app confronta le due.
 on:
   workflow_dispatch:
     inputs:
@@ -28,12 +29,14 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build Release
         run: |
           set -o pipefail
           VERSION_ARGS=()
           if [ -n "$RELEASE_TAG" ]; then
-            VERSION_ARGS=(MARKETING_VERSION="${RELEASE_TAG#v}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
+            VERSION_ARGS=(MARKETING_VERSION="${RELEASE_TAG#v}" CURRENT_PROJECT_VERSION="$(git rev-list --count HEAD)")
           fi
           xcodebuild build \
             -project CalenTask.xcodeproj \
