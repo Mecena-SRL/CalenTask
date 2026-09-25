@@ -28,7 +28,7 @@ jobs:
             -destination 'platform=macOS' \
             -only-testing:CalenTaskTests \
             CODE_SIGNING_ALLOWED=NO \
-            | tee xcodebuild-test.log | grep -E "error:|warning: .*CalenTask/|Test (Suite|Case)|✔|✘|\*\* (TEST|BUILD)" || true
+            2>&1 | tee xcodebuild-test.log | grep -E "error:|warning: .*CalenTask/|Test (Suite|Case)|✔|✘|\*\* (TEST|BUILD)" || true
           grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log
       - name: Errori di compilazione
         if: failure()
@@ -54,7 +54,7 @@ jobs:
             -scheme CalenTask \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
-            | tee xcodebuild-ios.log | grep -E "error:|\*\* BUILD" || true
+            2>&1 | tee xcodebuild-ios.log | grep -E "error:|\*\* BUILD" || true
           grep -q "\*\* BUILD SUCCEEDED \*\*" xcodebuild-ios.log
       - name: Errori di compilazione
         if: failure()

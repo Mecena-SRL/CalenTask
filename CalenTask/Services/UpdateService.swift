@@ -9,7 +9,7 @@ import AppKit
 
 /// Una release come la restituisce l'API di GitHub (solo i campi usati).
 nonisolated struct GitHubRelease: Decodable, Equatable, Sendable {
-    struct Asset: Decodable, Equatable, Sendable {
+    nonisolated struct Asset: Decodable, Equatable, Sendable {
         let name: String
         let size: Int
         /// URL dell'API: con un token scarica anche dai repository privati.
