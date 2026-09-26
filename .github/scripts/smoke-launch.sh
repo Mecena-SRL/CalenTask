@@ -42,6 +42,11 @@ run_scenario() {
     sample "$pid" 3 -file "$OUT/$name-sample.txt" >/dev/null 2>&1 || true
     if grep -qE "_postWindowNeedsUpdateConstraints|layoutSubtreeIfNeeded" "$OUT/$name-sample.txt" 2>/dev/null; then
       echo "⚠️ $name: main thread impegnato nel layout (possibile ciclo)"
+      grep -m1 -A70 "main-thread" "$OUT/$name-sample.txt" | cut -c1-220
+      # Le funzioni più presenti in cima allo stack e i frame dell'app.
+      sed -n '/Sort by top of stack/,/Binary Images/p' "$OUT/$name-sample.txt" | head -40
+      grep -oE "CalenTask\\.[A-Za-z0-9_.]+|\\$s9CalenTask[A-Za-z0-9_]+|CalenTask +0x[0-9a-f]+ +[A-Za-z0-9_.()<>: ]+" \
+        "$OUT/$name-sample.txt" | sort | uniq -c | sort -rn | head -25
       alive=0
     fi
     kill "$pid" 2>/dev/null
@@ -88,9 +93,25 @@ for page in calendar today quick; do
   defaults write "$BUNDLE_ID" "NSWindow Frame main" "0 0 1600 1000 0 0 1920 1080 "
   # Tutti i moduli e le funzioni accesi: più viste montate, più copertura.
   cfg=$(printf '{"modules":["activities","projects","people","insights","production"],"features":["calendarAdvancedViews","calendarWeather","calendarSummary","calendarUnscheduled","sidebarMiniCalendar","todayInspector","smartLists","tags","externalRequests","dashboardMetrics"],"startPage":"%s","moduleOrderRaw":[]}' "$page")
-  defaults write "$BUNDLE_ID" app.configuration.v1 "$cfg"
+  defaults write "$BUNDLE_ID" app.configuration.v1 -string "$cfg"
   run_scenario "pagina-$page" 30
 done
+
+# 4 — Calendario con dati di prova (SmokeSeeder) in ogni vista, finestra
+# grande (Mese ricco a tutta altezza) e piccola (Mese a scorrimento).
+export CALENTASK_SMOKE_SEED=1
+defaults write "$BUNDLE_ID" app.configuration.v1 -string "${cfg//\"quick\"/\"calendar\"}"
+for size in "1600 1000" "820 640"; do
+  for mode in month week day quarter year; do
+    defaults write "$BUNDLE_ID" didShowWelcome -bool true
+    defaults write "$BUNDLE_ID" "NSWindow Frame main" "0 0 $size 0 0 1920 1080 "
+    defaults write "$BUNDLE_ID" calendarViewMode -string "$mode"
+    # Dopo un crash il prossimo avvio sarebbe "sicuro" (pagina Oggi).
+    defaults write "$BUNDLE_ID" launch.inProgress -bool false
+    run_scenario "calendario-$mode-${size%% *}" 20
+  done
+done
+unset CALENTASK_SMOKE_SEED
 
 echo "=== Crash report ==="
 ls -la "$REPORTS" 2>/dev/null | grep -i calentask || echo "(nessuno)"
