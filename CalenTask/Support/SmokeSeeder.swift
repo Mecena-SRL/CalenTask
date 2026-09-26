@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Dati di prova per lo smoke test della CI (`.github/scripts/smoke-launch.sh`):
 /// si attiva solo con la variabile d'ambiente `CALENTASK_SMOKE_SEED=1` e
