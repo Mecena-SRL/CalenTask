@@ -5,7 +5,8 @@ name: DMG
 # Si lancia a mano da Actions › DMG › Run workflow; l'artifact resta 14 giorni.
 # Con `release_tag` (es. v0.0.1) l'app prende quella versione e il DMG viene
 # allegato a una release BOZZA con quel tag (da pubblicare a mano); se la
-# bozza esiste già viene aggiornata. La build è il numero di commit, come
+# bozza esiste già viene aggiornata. Con `prerelease` la release esce subito
+# pubblicata come pre-release (le build del mercoledì e del sabato). La build è il numero di commit, come
 # nella Canary, così l'app confronta le due.
 on:
   workflow_dispatch:
@@ -14,6 +15,11 @@ on:
         description: "Tag della release bozza (es. v0.0.1); vuoto = solo artifact"
         required: false
         default: ""
+      prerelease:
+        description: "Pubblica subito come pre-release (invece della bozza)"
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - .github/workflows/dmg.yml
@@ -27,6 +33,7 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
+      PRERELEASE: ${{ inputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,17 +88,34 @@ jobs:
 
           **Installazione**: apri il DMG e trascina CalenTask in Applicazioni. Al primo avvio macOS la blocca: Impostazioni di Sistema › Privacy e sicurezza › "Apri comunque" (oppure `xattr -dr com.apple.quarantine /Applications/CalenTask.app`).
           EOF
+          # Novità dall'ultima versione pubblicata (tag vX.Y.Z precedente).
+          PREVIOUS=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$RELEASE_TAG" | head -1 || true)
+          if [ -n "$PREVIOUS" ]; then
+            {
+              echo ""
+              echo "**Novità da $PREVIOUS**:"
+              git log "$PREVIOUS..HEAD" --no-merges --max-count=40 --format='- %s (%h)'
+            } >> notes.md
+          fi
           echo "" >> notes.md
           echo "Commit: $GITHUB_SHA" >> notes.md
           # Una bozza con lo stesso tag esiste già: la si aggiorna (DMG
           # sostituito, commit e note nuovi) invece di crearne un doppione.
           # Una release già pubblicata non si tocca: `create` fallisce.
+          if [ "$PRERELEASE" = "true" ]; then
+            KIND=(--prerelease)
+          else
+            KIND=(--draft)
+          fi
           if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" = "true" ]; then
             gh release upload "$RELEASE_TAG" "$DMG_NAME.dmg" --clobber
             gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" \
               --title "CalenTask $RELEASE_TAG" --notes-file notes.md
+            if [ "$PRERELEASE" = "true" ]; then
+              gh release edit "$RELEASE_TAG" --draft=false --prerelease
+            fi
           else
             gh release create "$RELEASE_TAG" "$DMG_NAME.dmg" \
-              --draft --target "$GITHUB_SHA" \
+              "${KIND[@]}" --target "$GITHUB_SHA" \
               --title "CalenTask $RELEASE_TAG" --notes-file notes.md
           fi
