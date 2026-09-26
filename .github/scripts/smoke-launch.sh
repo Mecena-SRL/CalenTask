@@ -42,6 +42,11 @@ run_scenario() {
     sample "$pid" 3 -file "$OUT/$name-sample.txt" >/dev/null 2>&1 || true
     if grep -qE "_postWindowNeedsUpdateConstraints|layoutSubtreeIfNeeded" "$OUT/$name-sample.txt" 2>/dev/null; then
       echo "⚠️ $name: main thread impegnato nel layout (possibile ciclo)"
+      grep -m1 -A70 "main-thread" "$OUT/$name-sample.txt" | cut -c1-220
+      # Le funzioni più presenti in cima allo stack e i frame dell'app.
+      sed -n '/Sort by top of stack/,/Binary Images/p' "$OUT/$name-sample.txt" | head -40
+      grep -oE "CalenTask\\.[A-Za-z0-9_.]+|\\$s9CalenTask[A-Za-z0-9_]+|CalenTask +0x[0-9a-f]+ +[A-Za-z0-9_.()<>: ]+" \
+        "$OUT/$name-sample.txt" | sort | uniq -c | sort -rn | head -25
       alive=0
     fi
     kill "$pid" 2>/dev/null
