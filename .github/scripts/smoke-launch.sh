@@ -92,6 +92,22 @@ for page in calendar today quick; do
   run_scenario "pagina-$page" 30
 done
 
+# 4 — Calendario con dati di prova (SmokeSeeder) in ogni vista, finestra
+# grande (Mese ricco a tutta altezza) e piccola (Mese a scorrimento).
+export CALENTASK_SMOKE_SEED=1
+defaults write "$BUNDLE_ID" app.configuration.v1 "${cfg//\"quick\"/\"calendar\"}"
+for size in "1600 1000" "820 640"; do
+  for mode in month week day quarter year; do
+    defaults write "$BUNDLE_ID" didShowWelcome -bool true
+    defaults write "$BUNDLE_ID" "NSWindow Frame main" "0 0 $size 0 0 1920 1080 "
+    defaults write "$BUNDLE_ID" calendarViewMode -string "$mode"
+    # Dopo un crash il prossimo avvio sarebbe "sicuro" (pagina Oggi).
+    defaults write "$BUNDLE_ID" launch.inProgress -bool false
+    run_scenario "calendario-$mode-${size%% *}" 20
+  done
+done
+unset CALENTASK_SMOKE_SEED
+
 echo "=== Crash report ==="
 ls -la "$REPORTS" 2>/dev/null | grep -i calentask || echo "(nessuno)"
 for f in "$REPORTS"/CalenTask*; do
