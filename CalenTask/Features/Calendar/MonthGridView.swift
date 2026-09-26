@@ -29,7 +29,6 @@ struct MonthGridView: View {
     var fillsHeight = false
 
     @Namespace private var selectionNamespace
-    @State private var gridHeight: CGFloat = 0
 
     private let calendar = Calendar.app
 
@@ -145,23 +144,20 @@ struct MonthGridView: View {
 
     // MARK: Ricca (Mac/iPad)
 
+    /// #47/#48 — le righe si dividono l'altezza da sole (`maxHeight: .infinity`)
+    /// e ognuna ricava le corsie dalla propria misura: prima la griglia
+    /// misurava sé stessa in uno `@State` da cui dipendeva la sua altezza,
+    /// un ciclo di layout senza fine (app bloccata, poi il crash).
     private var richGrid: some View {
-        let weeks = weeks
-        let rowHeight = rowHeight(weekCount: weeks.count)
-        let maxLanes = max(1, Int((rowHeight - dayNumberHeight - 4) / (laneHeight + laneGap)))
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(Array(weeks.enumerated()), id: \.element.first) { index, week in
                 if index > 0 { Divider() }
-                weekRow(week, height: rowHeight, maxLanes: maxLanes)
+                weekRow(week)
+                    .frame(minHeight: fillsHeight ? minimumRowHeight : fixedRowHeight,
+                           maxHeight: fillsHeight ? .infinity : fixedRowHeight)
             }
-            if fillsHeight { Spacer(minLength: 0) }
         }
         .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { height in
-            gridHeight = height
-        }
         .background(DSColor.surface, in: RoundedRectangle(cornerRadius: DS.Radius.medium))
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.medium))
         .overlay {
@@ -170,21 +166,18 @@ struct MonthGridView: View {
         }
     }
 
-    /// Altezza di una riga: riempie lo spazio (a riposo) o fissa (in scroll).
-    private func rowHeight(weekCount: Int) -> CGFloat {
-        guard fillsHeight, gridHeight > 0, weekCount > 0 else { return fixedRowHeight }
-        let dividers = CGFloat(weekCount - 1)
-        return max(minimumRowHeight, (gridHeight - dividers) / CGFloat(weekCount))
+    /// Quante corsie stanno in una riga alta `height` (almeno una).
+    private func maxLanes(forRowHeight height: CGFloat) -> Int {
+        guard height.isFinite else { return 1 }
+        return max(1, Int((height - dayNumberHeight - 4) / (laneHeight + laneGap)))
     }
 
-    private func weekRow(_ week: [Date], height: CGFloat, maxLanes: Int) -> some View {
+    private func weekRow(_ week: [Date]) -> some View {
         let tasks = CalendarWeekLayout.tasks(in: week, from: tasksByDay, calendar: calendar)
         let layout = CalendarWeekLayout(
             columns: week.count,
             segments: CalendarWeekLayout.segments(for: tasks, days: week, calendar: calendar)
         )
-        let visible = layout.visiblePlacements(maxLanes: maxLanes)
-        let hidden = layout.hiddenCounts(maxLanes: maxLanes)
         let taskByID = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let dayCounts = week.map { (tasksByDay[calendar.startOfDay(for: $0)] ?? []).count }
 
@@ -193,12 +186,17 @@ struct MonthGridView: View {
                 Text("\(calendar.component(.weekOfYear, from: first))")
                     .font(.system(size: 9, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.tertiary)
-                    .frame(width: weekNumberWidth, height: height, alignment: .top)
                     .padding(.top, 8)
+                    .frame(width: weekNumberWidth)
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .overlay(alignment: .trailing) { Divider() }
             }
             GeometryReader { geo in
                 let columnWidth = geo.size.width / CGFloat(max(week.count, 1))
+                let height = geo.size.height
+                let lanes = maxLanes(forRowHeight: height)
+                let visible = layout.visiblePlacements(maxLanes: lanes)
+                let hidden = layout.hiddenCounts(maxLanes: lanes)
                 ZStack(alignment: .topLeading) {
                     HStack(spacing: 0) {
                         ForEach(Array(week.enumerated()), id: \.element) { index, day in
@@ -230,17 +228,16 @@ struct MonthGridView: View {
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 6)
-                                    .frame(width: columnWidth - 6, height: laneHeight, alignment: .leading)
+                                    .frame(width: max(0, columnWidth - 6), height: laneHeight, alignment: .leading)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .offset(x: CGFloat(index) * columnWidth + 3,
-                                    y: dayNumberHeight + CGFloat(maxLanes - 1) * (laneHeight + laneGap))
+                                    y: dayNumberHeight + CGFloat(lanes - 1) * (laneHeight + laneGap))
                         }
                     }
                 }
             }
-            .frame(height: height)
         }
     }
 
