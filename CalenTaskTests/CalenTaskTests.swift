@@ -191,7 +191,7 @@ struct DomainModelTests {
         let (workspace, me) = try SeedService.ensureSeed(in: context)
 
         let calendar = Calendar.current
-        let due = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 9))!
+        let due = calendar.date(from: DateComponents(year: 2030, month: 6, day: 1, hour: 9))!
         let task = TodoTask(workspaceID: workspace.id, title: "Affitto", dueAt: due, createdByID: me.id)
         context.insert(task)
         task.recurrenceFrequency = .monthly
@@ -219,7 +219,7 @@ struct DomainModelTests {
         let (workspace, me) = try SeedService.ensureSeed(in: context)
         let calendar = Calendar.current
         func date(_ month: Int, _ day: Int) -> Date {
-            calendar.date(from: DateComponents(year: 2027, month: month, day: day, hour: 9))!
+            calendar.date(from: DateComponents(year: 2031, month: month, day: day, hour: 9))!
         }
 
         var current = TodoTask(workspaceID: workspace.id, title: "Fattura fine mese",
@@ -251,6 +251,40 @@ struct DomainModelTests {
             feb2032, previous: feb2031, anchor: leap, frequency: .yearly, calendar: calendar
         )
         #expect(calendar.component(.day, from: restored) == 29)
+    }
+
+    /// #8 — `.fixed` completata in ritardo: niente occorrenze già passate,
+    /// si riparte dalla prima da oggi in poi (stesso orario, stesso passo).
+    @Test func overdueFixedRecurrenceSkipsToToday() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        func daysAgo(_ days: Int) -> Date {
+            calendar.date(bySettingHour: 9, minute: 0, second: 0,
+                          of: calendar.date(byAdding: .day, value: -days, to: today)!)!
+        }
+
+        let daily = TodoTask(workspaceID: workspace.id, title: "Pillola",
+                             dueAt: daysAgo(5), createdByID: me.id)
+        let weekly = TodoTask(workspaceID: workspace.id, title: "Riunione",
+                              dueAt: daysAgo(20), createdByID: me.id)
+        for (task, frequency) in [(daily, RecurrenceFrequency.daily), (weekly, .weekly)] {
+            context.insert(task)
+            task.recurrenceFrequency = frequency
+            task.recurrenceMode = .fixed
+            task.toggleDone()
+        }
+        try context.save()
+
+        let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
+        let nextDaily = try #require(open.first { $0.title == "Pillola" }?.dueAt)
+        let nextWeekly = try #require(open.first { $0.title == "Riunione" }?.dueAt)
+        #expect(calendar.isDate(nextDaily, inSameDayAs: today))
+        #expect(calendar.component(.hour, from: nextDaily) == 9)
+        // 20 giorni fa + 3 settimane = domani.
+        #expect(calendar.isDate(nextWeekly, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: today)!))
     }
 
     @Test func recurrenceStopsAfterEndDate() throws {

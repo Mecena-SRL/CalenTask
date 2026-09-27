@@ -149,11 +149,22 @@ extension TodoTask {
         }
 
         // L'ancora vale per la data di riferimento (scadenza, se c'è).
-        let nextDue = next(from: dueAt, anchored: true)
-        let nextStart = next(from: startAt, anchored: dueAt == nil)
+        var nextDue = next(from: dueAt, anchored: true)
+        var nextStart = next(from: startAt, anchored: dueAt == nil)
+        // Senza la data, `next` riparte da adesso: il riferimento è solo quella esistente.
+        var reference: Date? { dueAt != nil ? nextDue : nextStart }
+        // #8 — `.fixed` completata in ritardo: salta alle occorrenze già
+        // passate e riparte dalla prima da oggi in poi.
+        if recurrenceMode == .fixed {
+            let today = calendar.startOfDay(for: .now)
+            for _ in 0..<1_000 {
+                guard let date = reference, date < today else { break }
+                nextDue = next(from: nextDue, anchored: true)
+                nextStart = next(from: nextStart, anchored: dueAt == nil)
+            }
+        }
         if let recurrenceEndAt {
-            let probe = nextDue ?? nextStart ?? .distantFuture
-            guard probe <= recurrenceEndAt else { return }
+            guard (reference ?? .distantFuture) <= recurrenceEndAt else { return }
         }
         let plannedDue = dueAt == nil ? nil : nextDue
         let plannedStart = startAt == nil ? nil : nextStart

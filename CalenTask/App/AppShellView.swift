@@ -167,10 +167,11 @@ struct AppShellView: View {
                 .publisher(for: .NSPersistentStoreRemoteChange)
                 .debounce(for: .seconds(2), scheduler: RunLoop.main)
         ) { _ in
+            // #14 — il widget si aggiorna anche con l'app in background.
+            WidgetBridge.refresh(in: modelContext)
             guard scenePhase == .active else { return }
             NotificationService.shared.resyncAll(in: modelContext)
             scheduleDigest()
-            WidgetBridge.refresh(in: modelContext)
         }
     }
 
