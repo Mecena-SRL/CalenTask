@@ -210,6 +210,8 @@ struct DashboardView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { dayStamp = Date.now.startOfDay }
         }
+        // #13 — Mac lasciato aperto oltre la mezzanotte: la scena resta attiva.
+        .onDayChange { dayStamp = $0 }
     }
 
     private var dayOverview: some View {

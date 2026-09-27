@@ -1,13 +1,13 @@
 import Foundation
 
 extension Date {
-    var startOfDay: Date { Calendar.current.startOfDay(for: self) }
+    var startOfDay: Date { Calendar.app.startOfDay(for: self) }
 
-    var isToday: Bool { Calendar.current.isDateInToday(self) }
+    var isToday: Bool { Calendar.app.isDateInToday(self) }
 
     /// "Oggi", "Domani", "Ieri" or a short localized date.
     var dsRelativeLabel: String {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         if calendar.isDateInToday(self) { return "Oggi" }
         if calendar.isDateInTomorrow(self) { return "Domani" }
         if calendar.isDateInYesterday(self) { return "Ieri" }
