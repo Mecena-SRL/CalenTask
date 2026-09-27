@@ -57,6 +57,8 @@ private struct SidebarContent: View {
 
     // F2 — il mini-mese in fondo: si sfoglia senza lasciare la sidebar.
     @State private var miniMonth = Date.now.startOfDay
+    /// #13 — "oggi" dei badge: si aggiorna a mezzanotte e al cambio di fuso.
+    @State private var today = Date.now.startOfDay
 
     @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
     @AppStorage(DSAppearance.storageKey) private var appearanceRaw = DSAppearance.auto.rawValue
@@ -88,7 +90,7 @@ private struct SidebarContent: View {
     }
 
     var body: some View {
-        let stats = OpenTaskStats(tasks: openTasks, calendar: .current)
+        let stats = OpenTaskStats(tasks: openTasks, calendar: .app, now: today)
         let openCounts = stats.byProject
         let scopedProjects = projects
         let favoriteProjects = scopedProjects.filter(\.isFavorite)
@@ -214,6 +216,13 @@ private struct SidebarContent: View {
             }
             .padding(DS.s)
             .overlay(alignment: .top) { Divider() }
+        }
+        .onDayChange { newToday in
+            // Il mini-mese che mostrava il mese di "oggi" lo segue (fine mese).
+            if Calendar.app.isDate(miniMonth, equalTo: today, toGranularity: .month) {
+                miniMonth = newToday
+            }
+            today = newToday
         }
         .sheet(isPresented: $isCreatingSmartList) {
             SmartListEditorView()

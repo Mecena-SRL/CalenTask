@@ -29,9 +29,7 @@ struct TodayPanelView: View {
         TodayPanelContent(
             workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), today: today, onClose: onClose
         )
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
-            today = Calendar.app.startOfDay(for: .now)
-        }
+        .onDayChange { today = $0 }
     }
 }
 

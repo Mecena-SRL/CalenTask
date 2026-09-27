@@ -223,10 +223,15 @@ enum InboxDateBucket: Int, CaseIterable, Identifiable {
         }
     }
 
-    static func bucket(for date: Date, now: Date = .now, calendar: Calendar = .current) -> InboxDateBucket {
-        if calendar.isDateInToday(date) { return .today }
-        if calendar.isDateInYesterday(date) { return .yesterday }
+    /// Riferita a `now` (non all'orologio di sistema, come prima con
+    /// `isDateInToday`): testabile e coerente con "oggi" delle viste (#13).
+    static func bucket(for date: Date, now: Date = .now, calendar: Calendar = .app) -> InboxDateBucket {
         let startOfToday = calendar.startOfDay(for: now)
+        if date >= startOfToday { return .today }
+        if let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday),
+           date >= startOfYesterday {
+            return .yesterday
+        }
         if let weekAgo = calendar.date(byAdding: .day, value: -7, to: startOfToday),
            date >= weekAgo {
             return .lastWeek

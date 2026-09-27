@@ -203,3 +203,20 @@ struct CalendarStyleTests {
         #expect(CalendarWeekStyle(rawValue: "sconosciuto") == nil)
     }
 }
+
+/// #13 — I gruppi dell'Inbox dipendono dal `now` passato, non dall'orologio.
+@MainActor
+struct InboxDateBucketTests {
+    @Test func bucketsFollowReferenceDate() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Rome")!
+        let now = calendar.date(from: DateComponents(year: 2030, month: 3, day: 10, hour: 15))!
+        func at(_ day: Int, _ hour: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2030, month: 3, day: day, hour: hour))!
+        }
+        #expect(InboxDateBucket.bucket(for: at(10, 0), now: now, calendar: calendar) == .today)
+        #expect(InboxDateBucket.bucket(for: at(9, 23), now: now, calendar: calendar) == .yesterday)
+        #expect(InboxDateBucket.bucket(for: at(4, 12), now: now, calendar: calendar) == .lastWeek)
+        #expect(InboxDateBucket.bucket(for: at(2, 12), now: now, calendar: calendar) == .earlier)
+    }
+}

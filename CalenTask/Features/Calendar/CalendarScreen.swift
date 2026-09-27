@@ -298,6 +298,13 @@ struct CalendarScreen: View {
             .onChange(of: router.calendarDayToOpen) { _, _ in
                 consumeDeepLinkDay()
             }
+            // #13 — a mezzanotte, chi guardava "oggi" passa al nuovo giorno;
+            // al cambio di fuso il giorno selezionato si riallinea.
+            .onDayChange { newToday in
+                let calendar = Calendar.app
+                let yesterday = calendar.date(byAdding: .day, value: -1, to: newToday)
+                selectedDay = selectedDay == yesterday ? newToday : calendar.startOfDay(for: selectedDay)
+            }
             // Ricostruisce l'indice solo quando le task cambiano DAVVERO
             // (ogni mutazione passa per `touch()`, che aggiorna `updatedAt` —
             // vedi CLAUDE.md), non a ogni ridisegno di `body` innescato da
