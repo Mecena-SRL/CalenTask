@@ -121,8 +121,12 @@ extension TodoTask {
     func spawnNextOccurrence() {
         guard let frequency = recurrenceFrequency, let context = modelContext else { return }
         let calendar = Calendar.current
-        // #8 — l'ancora è la data di riferimento della PRIMA occorrenza.
-        let seriesAnchor = recurrenceAnchorAt ?? dueAt ?? startAt
+        // #8 — l'ancora è la data di riferimento della PRIMA occorrenza; se
+        // la serie è stata spostata a mano a un altro giorno, riparte da lì.
+        let seriesAnchor = Self.effectiveAnchor(
+            recurrenceAnchorAt, reference: dueAt ?? startAt,
+            frequency: frequency, calendar: calendar
+        )
 
         func next(from date: Date?, anchored: Bool) -> Date? {
             let anchor: Date
@@ -165,6 +169,11 @@ extension TodoTask {
         }
         if let recurrenceEndAt {
             guard (reference ?? .distantFuture) <= recurrenceEndAt else { return }
+        }
+        // #8 — con entrambe le date l'inizio segue la scadenza (stessa
+        // distanza in giorni, stesso orario): non scivola a fine mese.
+        if let startAt, let dueAt, let nextDue {
+            nextStart = Self.start(following: nextDue, start: startAt, due: dueAt, calendar: calendar)
         }
         let plannedDue = dueAt == nil ? nil : nextDue
         let plannedStart = startAt == nil ? nil : nextStart
@@ -210,6 +219,44 @@ extension TodoTask {
         nextTask.parentTask = parentTask
         nextTask.tags = tags
         NotificationService.shared.sync(task: nextTask)
+    }
+
+    /// #8 — L'ancora della serie resta valida finché la data di riferimento
+    /// corrente è quella che l'ancora prevede (lo stesso giorno, o l'ultimo
+    /// del mese se il mese è più corto; per le annuali anche lo stesso mese).
+    /// Se la serie è stata spostata a mano a un altro giorno, l'ancora
+    /// diventa la data corrente: 31/03 spostata al 30 → 30/04, 30/05…
+    nonisolated static func effectiveAnchor(
+        _ anchor: Date?, reference: Date?,
+        frequency: RecurrenceFrequency, calendar: Calendar
+    ) -> Date? {
+        guard let anchor, let reference else { return anchor ?? reference }
+        guard frequency == .monthly || frequency == .yearly else { return anchor }
+        let anchorParts = calendar.dateComponents([.month, .day], from: anchor)
+        let referenceParts = calendar.dateComponents([.month, .day], from: reference)
+        guard let anchorDay = anchorParts.day, let referenceDay = referenceParts.day,
+              let monthDays = calendar.range(of: .day, in: .month, for: reference)
+        else { return anchor }
+        let expectedDay = min(anchorDay, monthDays.upperBound - 1)
+        let sameMonth = frequency == .monthly || anchorParts.month == referenceParts.month
+        return referenceDay == expectedDay && sameMonth ? anchor : reference
+    }
+
+    /// #8 — Il nuovo inizio a partire dalla nuova scadenza: stessa distanza
+    /// in giorni di calendario e stesso orario dell'inizio originale (anche
+    /// a cavallo dell'ora legale).
+    nonisolated static func start(
+        following nextDue: Date, start: Date, due: Date, calendar: Calendar
+    ) -> Date? {
+        let gap = calendar.dateComponents(
+            [.day], from: calendar.startOfDay(for: due), to: calendar.startOfDay(for: start)
+        ).day ?? 0
+        let time = calendar.dateComponents([.hour, .minute, .second], from: start)
+        guard let day = calendar.date(byAdding: .day, value: gap, to: calendar.startOfDay(for: nextDue))
+        else { return nil }
+        return calendar.date(
+            bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: time.second ?? 0, of: day
+        )
     }
 
     /// #8 — Le ricorrenze mensili/annuali non scivolano a fine mese: se la
