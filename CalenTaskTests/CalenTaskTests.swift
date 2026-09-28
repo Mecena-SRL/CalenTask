@@ -253,6 +253,53 @@ struct DomainModelTests {
         #expect(calendar.component(.day, from: restored) == 29)
     }
 
+    /// #8 — con inizio e scadenza l'inizio segue la scadenza (stessa
+    /// distanza, stesso orario) invece di scivolare a fine mese; una serie
+    /// spostata a mano a un altro giorno aggiorna l'ancora.
+    @Test func monthlyRecurrenceWithBothDatesAndMovedSeries() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        func date(_ month: Int, _ day: Int, _ hour: Int = 9) -> Date {
+            calendar.date(from: DateComponents(year: 2031, month: month, day: day, hour: hour))!
+        }
+
+        var current = TodoTask(workspaceID: workspace.id, title: "Chiusura mese",
+                               startAt: date(1, 30, 10), dueAt: date(1, 31, 18), createdByID: me.id)
+        context.insert(current)
+        current.recurrenceFrequency = .monthly
+        current.recurrenceMode = .fixed
+        for (start, due) in [(date(2, 27, 10), date(2, 28, 18)), (date(3, 30, 10), date(3, 31, 18))] {
+            current.toggleDone()
+            let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
+            let next = try #require(open.first { $0.title == "Chiusura mese" })
+            #expect(next.startAt == start)
+            #expect(next.dueAt == due)
+            current = next
+        }
+
+        // Serie ancorata al 31 ma spostata a mano al 30/03: 30/04, 30/05.
+        var moved = TodoTask(workspaceID: workspace.id, title: "Spostata",
+                             dueAt: date(3, 30), createdByID: me.id)
+        context.insert(moved)
+        moved.recurrenceFrequency = .monthly
+        moved.recurrenceMode = .fixed
+        moved.recurrenceAnchorAt = date(1, 31)
+        for expected in [date(4, 30), date(5, 30)] {
+            moved.toggleDone()
+            let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
+            let next = try #require(open.first { $0.title == "Spostata" })
+            #expect(next.dueAt == expected)
+            #expect(next.recurrenceAnchorAt == date(3, 30))
+            moved = next
+        }
+        // Il giorno schiacciato a fine mese non conta come spostamento.
+        #expect(TodoTask.effectiveAnchor(
+            date(1, 31), reference: date(2, 28), frequency: .monthly, calendar: calendar
+        ) == date(1, 31))
+    }
+
     /// #8 — `.fixed` completata in ritardo: niente occorrenze già passate,
     /// si riparte dalla prima da oggi in poi (stesso orario, stesso passo).
     @Test func overdueFixedRecurrenceSkipsToToday() throws {
