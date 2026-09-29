@@ -5,7 +5,18 @@ import Charts
 /// La dashboard "Oggi" (D25): colpo d'occhio complessivo — urgenze in
 /// dettaglio, agenda di oggi per priorità, salute dei progetti e timeline
 /// dell'occupazione di progetti e fasi nel prossimo mese.
+///
+/// #5 — L'involucro legge lo spazio scelto e lo passa al contenuto, che
+/// filtra le attività nello STORE (query costruite nell'`init`).
 struct DashboardView: View {
+    @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
+
+    var body: some View {
+        DashboardContent(workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw))
+    }
+}
+
+private struct DashboardContent: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -13,12 +24,16 @@ struct DashboardView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
 
-    /// All open (non-deleted, non-done) tasks; grouping happens in memory.
-    @Query(filter: TodoTask.openPredicate, sort: \TodoTask.dueAt)
-    private var allOpenTasks: [TodoTask]
+    /// Aperte e Inbox dello spazio scelto (tutti se nil); raggruppate in memoria.
+    @Query private var scopedOpenTasks: [TodoTask]
+    @Query private var inboxTasks: [TodoTask]
 
-    @Query(filter: TodoTask.inboxPredicate)
-    private var allInboxTasks: [TodoTask]
+    init(workspaceID: UUID?) {
+        _scopedOpenTasks = Query(
+            filter: TodoTask.openPredicate(workspaceID: workspaceID), sort: \TodoTask.dueAt
+        )
+        _inboxTasks = Query(filter: TodoTask.inboxPredicate(workspaceID: workspaceID))
+    }
 
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var allProjects: [Project]
@@ -29,12 +44,8 @@ struct DashboardView: View {
     private var configuration: AppConfiguration { .decode(configurationRaw) }
 
     private var openTasks: [TodoTask] {
-        WorkspaceScope.filter(allOpenTasks, raw: scopeRaw, id: \.workspaceID)
-            .filter { configuration.isEnabled(.activities) || $0.kind == .event }
-    }
-
-    private var inboxTasks: [TodoTask] {
-        WorkspaceScope.filter(allInboxTasks, raw: scopeRaw, id: \.workspaceID)
+        guard !configuration.isEnabled(.activities) else { return scopedOpenTasks }
+        return scopedOpenTasks.filter { $0.kind == .event }
     }
 
     private var projects: [Project] {

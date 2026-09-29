@@ -210,17 +210,18 @@ struct AppShellView: View {
            let tomorrow = calendar.date(byAdding: .day, value: 1, to: fireDay) {
             fireDay = tomorrow
         }
-        let all = (try? modelContext.fetch(
-            FetchDescriptor<TodoTask>(predicate: TodoTask.openPredicate)
-        )) ?? []
-        let events = all.filter {
-            ($0.kind == .event || $0.kind == .shootDay)
-                && $0.startAt.map { calendar.isDate($0, inSameDayAs: fireDay) } == true
-        }.count
-        let deadlines = all.filter {
-            $0.dueAt.map { calendar.isDate($0, inSameDayAs: fireDay) } == true
-        }.count
-        let overdue = all.filter { ($0.dueAt ?? .distantFuture) < fireDay }.count
+        // #5 — solo le attività di quel giorno (e le scadute), filtrate nello
+        // store; modelli e fasi si scartano in memoria come nel pannello Oggi.
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: fireDay) ?? fireDay
+        func fetch(_ predicate: Predicate<TodoTask>) -> [TodoTask] {
+            ((try? modelContext.fetch(FetchDescriptor(predicate: predicate))) ?? [])
+                .filter { !$0.isTemplate && $0.kind != .phase }
+        }
+        let starting = fetch(TodoTask.openStartingPredicate(from: fireDay, to: dayEnd, workspaceID: nil))
+        let due = fetch(TodoTask.openDuePredicate(before: dayEnd, workspaceID: nil))
+        let events = starting.filter { $0.kind == .event || $0.kind == .shootDay }.count
+        let deadlines = due.filter { ($0.dueAt ?? .distantPast) >= fireDay }.count
+        let overdue = due.count - deadlines
         NotificationService.shared.scheduleDailyDigest(
             events: events, deadlines: deadlines, overdue: overdue
         )
@@ -544,17 +545,25 @@ private struct ShellSplitView: View {
 
 // MARK: - Compact: tab + Sfoglia (iPhone, D70)
 
+/// #5 — L'involucro legge lo spazio scelto; il contenuto filtra nello store.
 private struct ShellTabView: View {
+    @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
+
+    var body: some View {
+        ShellTabContent(workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw))
+    }
+}
+
+private struct ShellTabContent: View {
     @Environment(AppRouter.self) private var router
     @AppStorage(AppConfiguration.storageKey) private var configurationRaw = ""
     private var configuration: AppConfiguration { .decode(configurationRaw) }
 
-    @Query(filter: TodoTask.inboxPredicate)
-    private var inboxTasks: [TodoTask]
+    /// #5 — Inbox dello spazio scelto, filtrata nello STORE (badge della tab).
+    @Query private var inboxTasks: [TodoTask]
 
-    @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
-    private var scopedInboxCount: Int {
-        WorkspaceScope.filter(inboxTasks, raw: scopeRaw, id: \.workspaceID).count
+    init(workspaceID: UUID?) {
+        _inboxTasks = Query(filter: TodoTask.inboxPredicate(workspaceID: workspaceID))
     }
 
     /// Lo stack di Sfoglia: le destinazioni programmatiche (palette, sidebar
@@ -616,7 +625,7 @@ private struct ShellTabView: View {
                 InboxView()
                     .tabItem { tabLabel(.inbox) }
                     .tag(CompactTab.inbox)
-                    .badge(scopedInboxCount)
+                    .badge(inboxTasks.count)
             }
             BrowseView(path: $browsePath)
                 .tabItem { Label("Sfoglia", systemImage: "square.grid.2x2") }

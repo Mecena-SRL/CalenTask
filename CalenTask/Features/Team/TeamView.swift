@@ -14,11 +14,19 @@ struct TeamView: View {
     @Query(filter: TodoTask.openPredicate)
     private var openTasks: [TodoTask]
 
+    /// Attività aperte per persona, contate in un solo passaggio.
+    private var loadByPerson: [UUID: Int] {
+        openTasks.reduce(into: [:]) { counts, task in
+            if let id = task.assigneeID { counts[id, default: 0] += 1 }
+        }
+    }
+
     @State private var newName = ""
     @State private var newEmail = ""
 
     var body: some View {
         NavigationStack {
+            let load = loadByPerson
             List {
                 ForEach(people, id: \.id) { person in
                     HStack(spacing: DS.m) {
@@ -33,9 +41,8 @@ struct TeamView: View {
                             }
                         }
                         Spacer()
-                        let load = openTasks.filter { $0.assigneeID == person.id }.count
-                        if load > 0 {
-                            Text("\(load) attività")
+                        if let count = load[person.id], count > 0 {
+                            Text("\(count) attività")
                                 .font(.dsNumeric)
                                 .foregroundStyle(.secondary)
                         }
