@@ -18,9 +18,6 @@ struct CommandPaletteView: View {
            sort: \SavedView.createdAt)
     private var smartLists: [SavedView]
 
-    @Query(filter: TodoTask.openPredicate)
-    private var openTasks: [TodoTask]
-
     @State private var query = ""
     @FocusState private var isFocused: Bool
 
@@ -153,12 +150,29 @@ struct CommandPaletteView: View {
         }
     }
 
+    /// #5 — Ricerca nello STORE (spazio scelto, titolo) invece di tenere in
+    /// memoria tutte le aperte: a palette chiusa o senza testo, nessun fetch.
+    private var matchingTasks: [TodoTask] {
+        var descriptor = FetchDescriptor<TodoTask>(
+            predicate: TodoTask.openTitlePredicate(
+                matching: query, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw)
+            ),
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 40
+        do {
+            let found = try modelContext.fetch(descriptor)
+            return Array(found.lazy.filter { !$0.isTemplate && !$0.isPhase }.prefix(8))
+        } catch {
+            reportFailure("Ricerca ⌘K fallita: \(error)")
+            return []
+        }
+    }
+
     private var taskCommands: [Command] {
         // Le attività entrano solo quando si cerca: il default resta leggero.
         guard query.count >= 2 else { return [] }
-        return WorkspaceScope.filter(openTasks, raw: scopeRaw, id: \.workspaceID)
-            .filter { $0.title.localizedCaseInsensitiveContains(query) }
-            .prefix(8)
+        return matchingTasks
             .map { task in
                 Command(id: "task-\(task.id)", title: task.title,
                         subtitle: task.project?.name ?? "Inbox",
