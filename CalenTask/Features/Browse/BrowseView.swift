@@ -13,9 +13,6 @@ struct BrowseView: View {
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var allProjects: [Project]
 
-    @Query(filter: TodoTask.openPredicate)
-    private var allOpenTasks: [TodoTask]
-
     @Query(filter: #Predicate<SavedView> { $0.deletedAt == nil && $0.projectID == nil },
            sort: \SavedView.createdAt)
     private var allSavedViews: [SavedView]
@@ -168,21 +165,7 @@ struct BrowseView: View {
     @ViewBuilder
     private var listsSection: some View {
         Section("Liste") {
-            ForEach(smartLists, id: \.id) { list in
-                NavigationLink(value: AppDestination.smartList(list.id)) {
-                    smartListRow(list)
-                }
-                .contextMenu {
-                    Button(role: .destructive) {
-                        withAnimation(.dsSoft) {
-                            list.deletedAt = .now
-                            list.updatedAt = .now
-                        }
-                    } label: {
-                        Label("Elimina lista", systemImage: "trash")
-                    }
-                }
-            }
+            BrowseSmartListRows(lists: smartLists, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw))
             Button {
                 isCreatingSmartList = true
             } label: {
@@ -195,21 +178,6 @@ struct BrowseView: View {
                 }
             }
         }
-    }
-
-    private func smartListRow(_ list: SavedView) -> some View {
-        let filters = list.filters
-        let count = allOpenTasks
-            .filter { $0.workspaceID == list.workspaceID && filters.matches($0) }
-            .count
-        return Label {
-            Text(list.name)
-                .font(.dsMeta.weight(.medium))
-        } icon: {
-            Image(systemName: "bookmark.fill")
-                .foregroundStyle(Color.accentColor)
-        }
-        .badge(count)
     }
 
     // MARK: Etichette (F3)
@@ -292,4 +260,49 @@ struct BrowseView: View {
     BrowseView(path: .constant([]))
         .environment(AppRouter())
         .modelContainer(PreviewSampleData.make().container)
+}
+
+/// #5 — Righe delle liste smart con il conteggio delle aperte dello spazio
+/// scelto, filtrate nello STORE (query costruita nell'`init`).
+private struct BrowseSmartListRows: View {
+    let lists: [SavedView]
+    @Query private var openTasks: [TodoTask]
+
+    init(lists: [SavedView], workspaceID: UUID?) {
+        self.lists = lists
+        _openTasks = Query(filter: TodoTask.openPredicate(workspaceID: workspaceID))
+    }
+
+    var body: some View {
+        ForEach(lists, id: \.id) { list in
+            NavigationLink(value: AppDestination.smartList(list.id)) {
+                row(list)
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    withAnimation(.dsSoft) {
+                        list.deletedAt = .now
+                        list.updatedAt = .now
+                    }
+                } label: {
+                    Label("Elimina lista", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func row(_ list: SavedView) -> some View {
+        let filters = list.filters
+        let count = openTasks
+            .filter { $0.workspaceID == list.workspaceID && filters.matches($0) }
+            .count
+        return Label {
+            Text(list.name)
+                .font(.dsMeta.weight(.medium))
+        } icon: {
+            Image(systemName: "bookmark.fill")
+                .foregroundStyle(Color.accentColor)
+        }
+        .badge(count)
+    }
 }

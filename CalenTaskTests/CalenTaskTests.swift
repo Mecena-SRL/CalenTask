@@ -1131,6 +1131,17 @@ struct DomainModelTests {
 
         #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.openPredicate(workspaceID: other))) == 1)
         #expect(try context.fetchCount(FetchDescriptor(predicate: TodoTask.inboxPredicate(workspaceID: other))) == 1)
+
+        // ⌘K: titolo senza maiuscole/accenti, niente completate né altri spazi.
+        func search(_ text: String, _ workspaceID: UUID?) throws -> Set<String> {
+            Set(try context.fetch(FetchDescriptor(
+                predicate: TodoTask.openTitlePredicate(matching: text, workspaceID: workspaceID)
+            )).map(\.title))
+        }
+        #expect(try search("riunione", workspace.id) == ["Riunione"])
+        #expect(try search("senza", workspace.id).isEmpty)
+        #expect(try search("spazio", workspace.id).isEmpty)
+        #expect(try search("spazio", nil) == ["Altro spazio"])
         #expect(WorkspaceScope.filter([workspace], raw: other.uuidString, id: \.id).isEmpty)
         #expect(WorkspaceScope.filter([workspace], raw: workspace.id.uuidString, id: \.id).count == 1)
     }

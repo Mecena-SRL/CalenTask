@@ -143,6 +143,24 @@ extension TodoTask {
         }
     }
 
+    // MARK: Ricerca (⌘K)
+
+    /// Non completate il cui titolo contiene `text`. Fasi e modelli si
+    /// scartano in memoria: un predicato più lungo supera il type-checker.
+    static func openTitlePredicate(matching text: String, workspaceID: UUID?) -> Predicate<TodoTask> {
+        let doneRaw = TaskStatus.done.rawValue
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && task.statusRaw != doneRaw
+                    && task.title.localizedStandardContains(text)
+            }
+        }
+        return #Predicate<TodoTask> { task in
+            task.workspaceID == workspaceID && task.deletedAt == nil
+                && task.statusRaw != doneRaw && task.title.localizedStandardContains(text)
+        }
+    }
+
     // MARK: Pannello Oggi
 
     /// Non completate con inizio in [start, end). Modelli e fasi si scartano
