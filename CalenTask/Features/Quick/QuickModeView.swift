@@ -5,7 +5,18 @@ import SwiftData
 /// clean readable list, cards that expand inline to go deeper.
 /// Scope: ALL workspaces by default; filter per workspace, created-by-me or
 /// assigned-to-me. Sorting and filtering live in the toolbar.
+///
+/// #5 — L'involucro legge lo spazio scelto e lo passa al contenuto, che
+/// filtra le attività nello STORE (query costruite nell'`init`).
 struct QuickModeView: View {
+    @AppStorage(WorkspaceScope.storageKey) private var scopeRaw = "all"
+
+    var body: some View {
+        QuickModeContent(workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw))
+    }
+}
+
+private struct QuickModeContent: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppRouter.self) private var router
     #if os(iOS)
@@ -24,20 +35,26 @@ struct QuickModeView: View {
         WorkspaceScope.filter(allProjects, raw: scopeRaw, id: \.workspaceID)
     }
 
-    @Query(filter: TodoTask.openPredicate, sort: \TodoTask.createdAt, order: .reverse)
-    private var openTasks: [TodoTask]
+    /// Aperte dello spazio scelto (tutti se nil).
+    @Query private var openTasks: [TodoTask]
 
-    /// F12 — le completate vivono in coda, su richiesta.
-    @Query(filter: #Predicate<TodoTask> {
-        $0.deletedAt == nil && !$0.isTemplate && $0.completedAt != nil
-    }, sort: \TodoTask.completedAt, order: .reverse)
-    private var doneTasks: [TodoTask]
+    /// F12 — le completate vivono in coda, su richiesta: solo gli ultimi 7
+    /// giorni dello spazio scelto, al massimo 20, filtrate nello store.
+    @Query private var recentlyDone: [TodoTask]
 
-    private var recentlyDone: [TodoTask] {
-        let cutoff = Calendar.app.date(byAdding: .day, value: -7, to: .now) ?? .now
-        var base = doneTasks.filter { ($0.completedAt ?? .distantPast) >= cutoff }
-        base = WorkspaceScope.filter(base, raw: scopeRaw, id: \.workspaceID)
-        return Array(base.prefix(20))
+    init(workspaceID: UUID?) {
+        _openTasks = Query(
+            filter: TodoTask.openPredicate(workspaceID: workspaceID),
+            sort: \TodoTask.createdAt, order: .reverse
+        )
+        let calendar = Calendar.app
+        let cutoff = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: .now)) ?? .now
+        var done = FetchDescriptor<TodoTask>(
+            predicate: TodoTask.completedSincePredicate(cutoff, workspaceID: workspaceID),
+            sortBy: [SortDescriptor(\TodoTask.completedAt, order: .reverse)]
+        )
+        done.fetchLimit = 20
+        _recentlyDone = Query(done)
     }
 
     // Scope spazio: GLOBALE, condiviso con tutta l'app (D44).
@@ -327,8 +344,7 @@ struct QuickModeView: View {
     }
 
     private var scopedTasks: [TodoTask] {
-        var base = openTasks.filter { $0.parentTask == nil || $0.parentTask?.isPhase == true }
-        base = WorkspaceScope.filter(base, raw: scopeRaw, id: \.workspaceID)
+        let base = openTasks.filter { $0.parentTask == nil || $0.parentTask?.isPhase == true }
         switch personFilterRaw {
         case "mine-created":
             return base.filter { $0.createdByID == currentUserID }

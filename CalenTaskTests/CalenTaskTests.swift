@@ -1146,6 +1146,37 @@ struct DomainModelTests {
         #expect(WorkspaceScope.filter([workspace], raw: workspace.id.uuidString, id: \.id).count == 1)
     }
 
+    @Test func completedSincePredicateFiltersInStore() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let cutoff = Date(timeIntervalSince1970: 1_800_000_000)
+        func add(_ title: String, completedAt: Date?, workspaceID: UUID? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title,
+                                status: completedAt == nil ? .todo : .done, createdByID: me.id)
+            task.completedAt = completedAt
+            context.insert(task)
+            return task
+        }
+        _ = add("Recente", completedAt: cutoff.addingTimeInterval(60))
+        _ = add("Al limite", completedAt: cutoff)
+        _ = add("Vecchia", completedAt: cutoff.addingTimeInterval(-60))
+        _ = add("Aperta", completedAt: nil)
+        add("Cancellata", completedAt: cutoff.addingTimeInterval(60)).deletedAt = .now
+        add("Modello", completedAt: cutoff.addingTimeInterval(60)).isTemplate = true
+        let other = UUID()
+        _ = add("Altro spazio", completedAt: cutoff.addingTimeInterval(60), workspaceID: other)
+
+        func titles(_ workspaceID: UUID?) throws -> Set<String> {
+            Set(try context.fetch(FetchDescriptor(
+                predicate: TodoTask.completedSincePredicate(cutoff, workspaceID: workspaceID)
+            )).map(\.title))
+        }
+        #expect(try titles(workspace.id) == ["Recente", "Al limite"])
+        #expect(try titles(other) == ["Altro spazio"])
+        #expect(try titles(nil) == ["Recente", "Al limite", "Altro spazio"])
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext

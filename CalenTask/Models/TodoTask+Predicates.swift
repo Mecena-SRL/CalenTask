@@ -161,6 +161,23 @@ extension TodoTask {
         }
     }
 
+    // MARK: Rapida
+
+    /// Completate da `since` in poi (F12, "completate recenti"). Niente
+    /// `completedAt != nil` esplicito: il default `distantPast` lo esclude già.
+    static func completedSincePredicate(_ since: Date, workspaceID: UUID?) -> Predicate<TodoTask> {
+        let past = Date.distantPast
+        guard let workspaceID else {
+            return #Predicate<TodoTask> { task in
+                task.deletedAt == nil && !task.isTemplate && (task.completedAt ?? past) >= since
+            }
+        }
+        return #Predicate<TodoTask> { task in
+            task.workspaceID == workspaceID && task.deletedAt == nil && !task.isTemplate
+                && (task.completedAt ?? past) >= since
+        }
+    }
+
     // MARK: Pannello Oggi
 
     /// Non completate con inizio in [start, end). Modelli e fasi si scartano
