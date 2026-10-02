@@ -95,6 +95,9 @@ struct CalendarScreen: View {
     /// #5 — Solo la finestra caricata (`loadWindow`) dello spazio scelto,
     /// filtrata nello store da `CalendarWindowQuery`.
     @State private var windowTasks: [TodoTask] = []
+    /// #6 — Cresce a ogni consegna di `CalendarWindowQuery`: l'indice si
+    /// ricostruisce confrontando un intero, non scorrendo le task a ogni render.
+    @State private var windowVersion = 0
 
     /// I membri dello spazio: risolvono `assigneeID` per le corsie "per persona".
     @Query(filter: #Predicate<UserProfile> { $0.deletedAt == nil })
@@ -246,7 +249,11 @@ struct CalendarScreen: View {
             .background {
                 CalendarWindowQuery(
                     window: loadWindow, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw)
-                ) { windowTasks = $0 }
+                ) {
+                    windowTasks = $0
+                    windowVersion &+= 1
+                }
+                .equatable()
                 .id("\(loadWindow.start.timeIntervalSince1970)|\(loadWindow.end.timeIntervalSince1970)|\(scopeRaw)")
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
@@ -306,9 +313,8 @@ struct CalendarScreen: View {
                 selectedDay = selectedDay == yesterday ? newToday : calendar.startOfDay(for: selectedDay)
             }
             // Ricostruisce l'indice solo quando le task cambiano DAVVERO
-            // (ogni mutazione passa per `touch()`, che aggiorna `updatedAt` —
-            // vedi CLAUDE.md), non a ogni ridisegno di `body` innescato da
-            // pinch/densità/selezione giorno/hover.
+            // (nuova consegna della query) o i filtri, non a ogni ridisegno
+            // di `body` innescato da pinch/densità/selezione giorno/hover.
             .onChange(of: indexKey, initial: true) { _, _ in
                 calendarIndex = CalendarTaskIndex(tasks: liveTasks, calendar: calendar)
             }
@@ -1472,14 +1478,11 @@ struct CalendarScreen: View {
         Set(hiddenProjectsRaw.split(separator: ",").map(String.init))
     }
 
-    /// #6 — Chiave economica per ricostruire l'indice: prima ogni render
-    /// filtrava tutte le task, faceva il fault di `task.project` e allocava
-    /// un array di N date. Ora solo letture di attributi, zero allocazioni:
-    /// la somma delle `updatedAt` cambia a ogni `touch()` (anche arrivato da
-    /// iCloud con un orario più vecchio), il conteggio a ogni cancellazione.
+    /// #6 — Chiave O(1) per ricostruire l'indice: la versione della finestra
+    /// (cambia quando `CalendarWindowQuery` consegna risultati diversi) più i
+    /// filtri. Prima ogni render sommava le `updatedAt` di tutta la finestra.
     private struct IndexKey: Equatable {
-        let count: Int
-        let updatedChecksum: Int
+        let windowVersion: Int
         let scope: String
         let hiddenProjects: String
         let hidesUnassigned: Bool
@@ -1487,10 +1490,7 @@ struct CalendarScreen: View {
 
     private var indexKey: IndexKey {
         IndexKey(
-            count: windowTasks.count,
-            updatedChecksum: windowTasks.reduce(0) {
-                $0 &+ Int($1.updatedAt.timeIntervalSinceReferenceDate * 1000)
-            },
+            windowVersion: windowVersion,
             scope: scopeRaw,
             hiddenProjects: hiddenProjectsRaw,
             hidesUnassigned: hidesUnassigned
@@ -1531,14 +1531,24 @@ struct CalendarScreen: View {
 /// #5 — Le query del calendario: SOLO la finestra caricata e lo spazio
 /// scelto, filtrate nello store (prima: tutte le task di sempre, filtrate in
 /// memoria). Consegna i risultati quando cambiano davvero.
-private struct CalendarWindowQuery: View {
+///
+/// #6 — `Equatable` (finestra e spazio): con `.equatable()` il ridisegno del
+/// calendario (pinch, hover, selezione) non rivaluta `body` né `resultsKey`;
+/// le `@Query` aggiornano comunque la vista quando lo store cambia.
+private struct CalendarWindowQuery: View, Equatable {
     // Una query per predicato di `TodoTask.calendarWindowPredicates`.
     @Query private var starting: [TodoTask]
     @Query private var ongoing: [TodoTask]
     @Query private var due: [TodoTask]
     @Query private var spanning: [TodoTask]
     @Query private var unscheduled: [TodoTask]
+    let window: DateInterval
+    let workspaceID: UUID?
     let onChange: ([TodoTask]) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.window == rhs.window && lhs.workspaceID == rhs.workspaceID
+    }
 
     init(window: DateInterval, workspaceID: UUID?, onChange: @escaping ([TodoTask]) -> Void) {
         let predicates = TodoTask.calendarWindowPredicates(
@@ -1549,6 +1559,8 @@ private struct CalendarWindowQuery: View {
         _due = Query(filter: predicates[2])
         _spanning = Query(filter: predicates[3])
         _unscheduled = Query(filter: predicates[4])
+        self.window = window
+        self.workspaceID = workspaceID
         self.onChange = onChange
     }
 
