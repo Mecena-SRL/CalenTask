@@ -116,6 +116,7 @@ struct CalenTaskApp: App {
         WindowGroup {
             AppShellView()
                 .environment(router)
+                .taskMenuCatalog()
                 .preferredColorScheme(
                     (DSAppearance(rawValue: appearanceRaw) ?? .auto).colorScheme
                 )

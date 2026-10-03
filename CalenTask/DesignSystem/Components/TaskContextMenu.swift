@@ -1,12 +1,39 @@
 import SwiftUI
 import SwiftData
 
-/// Il menu contestuale unico delle attività (D46): stesso click destro,
-/// stesse azioni, ovunque — righe, card, blocchi, barre del Gantt.
-struct TaskMenuContent: View {
-    @Environment(\.modelContext) private var modelContext
-    @Bindable var task: TodoTask
+/// Progetti, persone e stage per il menu contestuale, letti una volta sola
+/// per finestra (#11): prima ogni riga, card, blocco e barra del Gantt aveva
+/// le sue 3 `@Query` (300 righe = 900 fetch osservate).
+///
+/// L'uguaglianza confronta solo gli identificativi: nomi, spazio e progetto
+/// degli elementi li osserva il menu stesso leggendoli dai modelli, quindi
+/// le viste col menu vengono invalidate solo se cambia un elenco.
+struct TaskMenuCatalog: Equatable {
+    var projects: [Project] = []
+    var people: [UserProfile] = []
+    var stages: [WorkflowStage] = []
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.projects.map(\.persistentModelID) == rhs.projects.map(\.persistentModelID)
+            && lhs.people.map(\.persistentModelID) == rhs.people.map(\.persistentModelID)
+            && lhs.stages.map(\.persistentModelID) == rhs.stages.map(\.persistentModelID)
+    }
+}
+
+private struct TaskMenuCatalogKey: EnvironmentKey {
+    static var defaultValue: TaskMenuCatalog? { nil }
+}
+
+extension EnvironmentValues {
+    /// `nil` fuori da una finestra che lo fornisce: il menu ripiega sulle sue query.
+    var taskMenuCatalog: TaskMenuCatalog? {
+        get { self[TaskMenuCatalogKey.self] }
+        set { self[TaskMenuCatalogKey.self] = newValue }
+    }
+}
+
+/// Le uniche 3 query del menu contestuale, alla radice della finestra.
+private struct TaskMenuCatalogProvider: ViewModifier {
     @Query(filter: #Predicate<Project> { $0.deletedAt == nil }, sort: \Project.sortOrder)
     private var projects: [Project]
 
@@ -16,7 +43,47 @@ struct TaskMenuContent: View {
 
     @Query(filter: #Predicate<WorkflowStage> { $0.deletedAt == nil },
            sort: \WorkflowStage.order)
-    private var allStages: [WorkflowStage]
+    private var stages: [WorkflowStage]
+
+    func body(content: Content) -> some View {
+        content.environment(
+            \.taskMenuCatalog,
+            TaskMenuCatalog(projects: projects, people: people, stages: stages)
+        )
+    }
+}
+
+extension View {
+    /// Fornisce progetti, persone e stage a tutti i menu contestuali sottostanti.
+    func taskMenuCatalog() -> some View {
+        modifier(TaskMenuCatalogProvider())
+    }
+}
+
+/// Il menu contestuale unico delle attività (D46): stesso click destro,
+/// stesse azioni, ovunque — righe, card, blocchi, barre del Gantt.
+struct TaskMenuContent: View {
+    @Environment(\.taskMenuCatalog) private var catalog
+    var task: TodoTask
+
+    var body: some View {
+        if let catalog {
+            TaskMenuItems(task: task, catalog: catalog)
+        } else {
+            TaskMenuContent(task: task)
+                .taskMenuCatalog()
+        }
+    }
+}
+
+private struct TaskMenuItems: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var task: TodoTask
+    let catalog: TaskMenuCatalog
+
+    private var projects: [Project] { catalog.projects }
+    private var people: [UserProfile] { catalog.people }
+    private var allStages: [WorkflowStage] { catalog.stages }
 
     @Environment(\.openURL) private var openURL
 
