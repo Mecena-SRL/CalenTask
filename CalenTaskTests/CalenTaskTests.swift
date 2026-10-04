@@ -921,14 +921,14 @@ struct DomainModelTests {
         let container = try makeContainer()
         let context = container.mainContext
         let (workspace, me) = try SeedService.ensureSeed(in: context)
-        let urgent = Tag(workspaceID: workspace.id, name: "urgente")
-        let removed = Tag(workspaceID: workspace.id, name: "vecchia")
+        let urgent = CalenTask.Tag(workspaceID: workspace.id, name: "urgente")
+        let removed = CalenTask.Tag(workspaceID: workspace.id, name: "vecchia")
         removed.deletedAt = .now
         context.insert(urgent)
         context.insert(removed)
         @discardableResult
         func add(_ title: String, status: TaskStatus = .todo, priority: TaskPriority = .normal,
-                 tags: [Tag] = [], workspaceID: UUID? = nil) -> TodoTask {
+                 tags: [CalenTask.Tag] = [], workspaceID: UUID? = nil) -> TodoTask {
             let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title,
                                 status: status, priority: priority, createdByID: me.id)
             context.insert(task)
