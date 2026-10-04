@@ -915,6 +915,49 @@ struct DomainModelTests {
         #expect(stats.byDay[calendar.startOfDay(for: at(1))] == 2)
     }
 
+    /// #11 — badge della sidebar: etichette contate sulle sole aperte (non
+    /// con `tag.tasks`), liste smart contate in un passaggio per spazio.
+    @Test func sidebarTagAndSmartListCounts() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let urgent = Tag(workspaceID: workspace.id, name: "urgente")
+        let removed = Tag(workspaceID: workspace.id, name: "vecchia")
+        removed.deletedAt = .now
+        context.insert(urgent)
+        context.insert(removed)
+        @discardableResult
+        func add(_ title: String, status: TaskStatus = .todo, priority: TaskPriority = .normal,
+                 tags: [Tag] = [], workspaceID: UUID? = nil) -> TodoTask {
+            let task = TodoTask(workspaceID: workspaceID ?? workspace.id, title: title,
+                                status: status, priority: priority, createdByID: me.id)
+            context.insert(task)
+            task.tags = tags
+            return task
+        }
+        add("Aperta urgente", priority: .urgent, tags: [urgent, removed])
+        add("Aperta", tags: [urgent])
+        add("Fatta", status: .done, priority: .urgent, tags: [urgent])
+        add("Altro spazio", priority: .urgent, workspaceID: UUID())
+        try context.save()
+
+        let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate(workspaceID: nil)))
+        let stats = OpenTaskStats(tasks: open, calendar: .app, countsTags: true)
+        #expect(stats.byTag[urgent.id] == 2)
+        #expect(stats.byTag[removed.id] == nil)
+        #expect(OpenTaskStats(tasks: open, calendar: .app).byTag.isEmpty)
+
+        var filters = SavedViewFilters()
+        filters.priorities = [.urgent]
+        let list = SavedView(workspaceID: workspace.id, name: "Urgenti", viewType: .list, filters: filters)
+        let everything = SavedView(workspaceID: workspace.id, name: "Tutte", viewType: .list)
+        context.insert(list)
+        context.insert(everything)
+        let counts = SavedViewFilters.counts(for: [list, everything], in: open)
+        #expect(counts[list.id] == 1)
+        #expect(counts[everything.id] == 2)
+    }
+
     /// Inizio e fine restano in ordine: una fine prima dell'inizio mandava
     /// in crash l'agenda del giorno (range rovesciato).
     @Test func startAndEndStayOrdered() throws {

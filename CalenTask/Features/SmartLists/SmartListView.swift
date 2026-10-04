@@ -5,24 +5,46 @@ import SwiftData
 
 extension SavedViewFilters {
     /// Tutti i criteri in AND; array vuoti = nessun vincolo.
-    func matches(_ task: TodoTask) -> Bool {
-        guard task.deletedAt == nil, !task.isTemplate, !task.isPhase else { return false }
-        if !includeDone && task.isDone { return false }
-        if !statuses.isEmpty && !statuses.contains(task.status) { return false }
-        if !priorities.isEmpty && !priorities.contains(task.priority) { return false }
-        if !kinds.isEmpty && !kinds.contains(task.kind) { return false }
-        if !tagIDs.isEmpty {
-            let taskTagIDs = Set(task.tags.filter { $0.deletedAt == nil }.map(\.id))
-            if !tagIDs.contains(where: taskTagIDs.contains) { return false }
+    func matches(_ task: TodoTask, now: Date = .now) -> Bool {
+        matcher(now: now)(task)
+    }
+
+    /// #11 — Il filtro pronto per molte attività: il limite della scadenza
+    /// si calcola una volta, non una per attività.
+    func matcher(now: Date = .now) -> (TodoTask) -> Bool {
+        let dueLimit = dueWithinDays.flatMap {
+            Calendar.app.date(byAdding: .day, value: $0 + 1, to: Calendar.app.startOfDay(for: now))
         }
-        if let days = dueWithinDays {
-            guard let dueAt = task.dueAt,
-                  let limit = Calendar.app.date(
-                    byAdding: .day, value: days + 1, to: .now.startOfDay)
-            else { return false }
-            if dueAt >= limit { return false }
+        return { task in
+            guard task.deletedAt == nil, !task.isTemplate, !task.isPhase else { return false }
+            if !includeDone && task.isDone { return false }
+            if !statuses.isEmpty && !statuses.contains(task.status) { return false }
+            if !priorities.isEmpty && !priorities.contains(task.priority) { return false }
+            if !kinds.isEmpty && !kinds.contains(task.kind) { return false }
+            if !tagIDs.isEmpty {
+                let taskTagIDs = Set(task.tags.filter { $0.deletedAt == nil }.map(\.id))
+                if !tagIDs.contains(where: taskTagIDs.contains) { return false }
+            }
+            if dueWithinDays != nil {
+                guard let dueAt = task.dueAt, let dueLimit else { return false }
+                if dueAt >= dueLimit { return false }
+            }
+            return true
         }
-        return true
+    }
+
+    /// #11 — Badge delle liste smart in un passaggio: le attività divise per
+    /// spazio una volta sola, ogni lista scorre solo quelle del suo spazio.
+    static func counts(for lists: [SavedView], in tasks: [TodoTask],
+                       now: Date = .now) -> [UUID: Int] {
+        guard !lists.isEmpty else { return [:] }
+        let byWorkspace = Dictionary(grouping: tasks, by: \.workspaceID)
+        var counts: [UUID: Int] = [:]
+        for list in lists {
+            let matches = list.filters.matcher(now: now)
+            counts[list.id] = byWorkspace[list.workspaceID]?.count(where: matches) ?? 0
+        }
+        return counts
     }
 }
 
@@ -34,15 +56,52 @@ extension SavedViewFilters {
 struct SmartListView: View {
     @Bindable var savedView: SavedView
 
-    @Query(filter: #Predicate<TodoTask> { $0.deletedAt == nil && !$0.isTemplate })
-    private var allTasks: [TodoTask]
-
     @State private var isEditing = false
 
+    var body: some View {
+        // #5 — dallo store solo lo spazio della lista (e solo le aperte se
+        // la lista non include le completate); il resto dei filtri in memoria.
+        SmartListTasks(
+            filters: savedView.filters,
+            workspaceID: savedView.workspaceID
+        )
+        .navigationTitle(savedView.name)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    isEditing = true
+                } label: {
+                    Label("Modifica filtri", systemImage: "slider.horizontal.3")
+                }
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            SmartListEditorView(savedView: savedView)
+        }
+    }
+}
+
+private struct SmartListTasks: View {
+    let filters: SavedViewFilters
+    @Query private var candidates: [TodoTask]
+
+    init(filters: SavedViewFilters, workspaceID: UUID) {
+        self.filters = filters
+        if filters.includeDone {
+            _candidates = Query(filter: #Predicate<TodoTask> {
+                $0.workspaceID == workspaceID && $0.deletedAt == nil && !$0.isTemplate
+            })
+        } else {
+            _candidates = Query(filter: TodoTask.openPredicate(workspaceID: workspaceID))
+        }
+    }
+
     private var tasks: [TodoTask] {
-        let filters = savedView.filters
-        return allTasks
-            .filter { $0.workspaceID == savedView.workspaceID && filters.matches($0) }
+        candidates
+            .filter(filters.matcher())
             .sorted {
                 ($0.dueAt ?? .distantFuture, $1.priorityRaw)
                     < ($1.dueAt ?? .distantFuture, $0.priorityRaw)
@@ -50,6 +109,7 @@ struct SmartListView: View {
     }
 
     var body: some View {
+        let tasks = tasks
         Group {
             if tasks.isEmpty {
                 DSEmptyState(
@@ -69,22 +129,6 @@ struct SmartListView: View {
                     }
                 }
             }
-        }
-        .navigationTitle(savedView.name)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    isEditing = true
-                } label: {
-                    Label("Modifica filtri", systemImage: "slider.horizontal.3")
-                }
-            }
-        }
-        .sheet(isPresented: $isEditing) {
-            SmartListEditorView(savedView: savedView)
         }
     }
 }

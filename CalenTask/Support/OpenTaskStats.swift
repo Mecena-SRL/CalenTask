@@ -12,8 +12,12 @@ struct OpenTaskStats {
     private(set) var todayEvents = 0
     /// Giornate con attività (inizio o scadenza) → pallini del mini-mese.
     private(set) var byDay: [Date: Int] = [:]
+    /// #11 — Aperte per etichetta, solo se richieste (`countsTags`): leggere
+    /// le etichette delle sole aperte invece di `tag.tasks`, che carica anche
+    /// tutte le completate di ogni etichetta.
+    private(set) var byTag: [UUID: Int] = [:]
 
-    init(tasks: [TodoTask], calendar: Calendar, now: Date = .now) {
+    init(tasks: [TodoTask], calendar: Calendar, now: Date = .now, countsTags: Bool = false) {
         let todayStart = calendar.startOfDay(for: now)
         let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? todayStart
         func isToday(_ date: Date?) -> Bool {
@@ -29,6 +33,9 @@ struct OpenTaskStats {
             if task.kind == .event, isToday(start) { todayEvents += 1 }
             if let start { byDay[calendar.startOfDay(for: start), default: 0] += 1 }
             if let due { byDay[calendar.startOfDay(for: due), default: 0] += 1 }
+            if countsTags {
+                for tag in task.tags where tag.deletedAt == nil { byTag[tag.id, default: 0] += 1 }
+            }
         }
     }
 }

@@ -90,7 +90,9 @@ private struct SidebarContent: View {
     }
 
     var body: some View {
-        let stats = OpenTaskStats(tasks: openTasks, calendar: .app, now: today)
+        let showsTagCounts = configuration.isEnabled(.tags) && showsTags
+        let stats = OpenTaskStats(tasks: openTasks, calendar: .app, now: today,
+                                  countsTags: showsTagCounts)
         let openCounts = stats.byProject
         let scopedProjects = projects
         let favoriteProjects = scopedProjects.filter(\.isFavorite)
@@ -160,13 +162,16 @@ private struct SidebarContent: View {
                 }
 
                 if configuration.isEnabled(.smartLists) {
+                    let scopedLists = smartLists
                     Section {
                         if showsLists {
-                            ForEach(smartLists, id: \.id) { list in
-                                smartListRow(list)
+                            // #11 — conteggi in un passaggio, non uno per riga.
+                            let listCounts = SavedViewFilters.counts(for: scopedLists, in: openTasks, now: today)
+                            ForEach(scopedLists, id: \.id) { list in
+                                smartListRow(list, count: listCounts[list.id] ?? 0)
                                     .tag(AppDestination.smartList(list.id))
                             }
-                            if smartLists.isEmpty {
+                            if scopedLists.isEmpty {
                                 SidebarPlaceholderRow(
                                     title: "Nuova lista smart",
                                     systemImage: "plus.circle"
@@ -176,7 +181,7 @@ private struct SidebarContent: View {
                     } header: {
                         SidebarGroupHeader(
                             title: "Liste",
-                            count: smartLists.count,
+                            count: scopedLists.count,
                             isExpanded: $showsLists,
                             accessory: SidebarGroupHeader.Accessory(systemImage: "plus", help: "Nuova lista") {
                                 isCreatingSmartList = true
@@ -190,7 +195,7 @@ private struct SidebarContent: View {
                     Section {
                         if showsTags {
                             ForEach(tags, id: \.id) { tag in
-                                tagRow(tag)
+                                tagRow(tag, count: stats.byTag[tag.id] ?? 0)
                                     .tag(AppDestination.tag(tag.id))
                             }
                         }
@@ -326,9 +331,8 @@ private struct SidebarContent: View {
         }
     }
 
-    private func tagRow(_ tag: Tag) -> some View {
-        let count = tag.tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isTemplate }.count
-        return HStack(spacing: DS.s) {
+    private func tagRow(_ tag: Tag, count: Int) -> some View {
+        HStack(spacing: DS.s) {
             Image(systemName: "number")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Color(hex: tag.colorHex))
@@ -343,12 +347,8 @@ private struct SidebarContent: View {
         .contentShape(Rectangle())
     }
 
-    private func smartListRow(_ list: SavedView) -> some View {
-        let filters = list.filters
-        let count = openTasks
-            .filter { $0.workspaceID == list.workspaceID && filters.matches($0) }
-            .count
-        return HStack(spacing: DS.s) {
+    private func smartListRow(_ list: SavedView, count: Int) -> some View {
+        HStack(spacing: DS.s) {
             Image(systemName: "line.3.horizontal.decrease.circle.fill")
                 .font(.system(size: 14))
                 .foregroundStyle(Color.accentColor)

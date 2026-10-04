@@ -274,9 +274,10 @@ private struct BrowseSmartListRows: View {
     }
 
     var body: some View {
+        let counts = SavedViewFilters.counts(for: lists, in: openTasks)
         ForEach(lists, id: \.id) { list in
             NavigationLink(value: AppDestination.smartList(list.id)) {
-                row(list)
+                row(list, count: counts[list.id] ?? 0)
             }
             .contextMenu {
                 Button(role: .destructive) {
@@ -291,12 +292,8 @@ private struct BrowseSmartListRows: View {
         }
     }
 
-    private func row(_ list: SavedView) -> some View {
-        let filters = list.filters
-        let count = openTasks
-            .filter { $0.workspaceID == list.workspaceID && filters.matches($0) }
-            .count
-        return Label {
+    private func row(_ list: SavedView, count: Int) -> some View {
+        Label {
             Text(list.name)
                 .font(.dsMeta.weight(.medium))
         } icon: {
