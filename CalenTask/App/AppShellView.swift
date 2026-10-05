@@ -167,6 +167,13 @@ struct AppShellView: View {
                 .publisher(for: .NSPersistentStoreRemoteChange)
                 .debounce(for: .seconds(2), scheduler: RunLoop.main)
         ) { _ in
+            // #12 — le creazioni non rifanno più il seed: i doppioni "Personale"
+            // e "me" portati da iCloud si fondono qui, all'arrivo.
+            do {
+                try SeedService.ensureSeed(in: modelContext)
+            } catch {
+                reportFailure("Seed after remote change failed: \(error)")
+            }
             // #14 — il widget si aggiorna anche con l'app in background.
             WidgetBridge.refresh(in: modelContext)
             guard scenePhase == .active else { return }

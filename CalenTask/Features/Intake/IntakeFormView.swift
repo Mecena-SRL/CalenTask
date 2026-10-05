@@ -79,7 +79,7 @@ struct IntakeFormView: View {
 
     private func submit() {
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             // Le richieste vivono nello spazio società (mai in Personale): lo
             // spazio attivo se è uno spazio condiviso (A2 — è il caso comune,
             // l'Intake si apre da lì), altrimenti il primo spazio condiviso.

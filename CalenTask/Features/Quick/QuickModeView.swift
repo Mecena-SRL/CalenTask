@@ -493,7 +493,7 @@ private struct QuickModeContent: View {
         let text = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         do {
-            let (_, me) = try SeedService.ensureSeed(in: modelContext)
+            let (_, me) = try SeedService.identity(in: modelContext)
             guard let workspace = captureWorkspace else { return }
             let task = TodoTask(
                 workspaceID: workspace.id,
