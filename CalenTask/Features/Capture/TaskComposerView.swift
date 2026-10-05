@@ -292,7 +292,7 @@ struct TaskComposerView: View {
     private func save() {
         guard !trimmedTitle.isEmpty else { return }
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             let target = WorkspaceScope.creationTarget(raw: scopeRaw, workspaces: workspaces) ?? workspace
             let task = TodoTask(
                 workspaceID: selectedProject?.workspaceID ?? target.id,

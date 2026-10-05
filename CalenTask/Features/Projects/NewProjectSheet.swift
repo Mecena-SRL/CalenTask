@@ -97,7 +97,7 @@ struct NewProjectSheet: View {
 
     private func create() {
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             let target = WorkspaceScope.creationTarget(raw: scopeRaw, workspaces: workspaces) ?? workspace
             try TemplateService.apply(
                 selectedTemplate,

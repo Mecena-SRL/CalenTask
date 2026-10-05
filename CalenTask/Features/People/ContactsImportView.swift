@@ -138,7 +138,7 @@ struct ContactsImportView: View {
     private func importSelected() {
         let picks = deviceContacts.filter { selection.contains($0.id) }
         do {
-            let (workspace, _) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, _) = try SeedService.identity(in: modelContext)
             let workspaceID = UUID(uuidString: scopeRaw) ?? workspace.id
             try ContactsImportService.importContacts(
                 picks, workspaceID: workspaceID, into: modelContext

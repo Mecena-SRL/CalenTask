@@ -245,7 +245,7 @@ struct SmartListEditorView: View {
                 savedView.filters = filters
                 savedView.updatedAt = .now
             } else {
-                let (workspace, _) = try SeedService.ensureSeed(in: modelContext)
+                let (workspace, _) = try SeedService.identity(in: modelContext)
                 let scopeRaw = UserDefaults.standard.string(forKey: WorkspaceScope.storageKey) ?? "all"
                 let workspaceID = UUID(uuidString: scopeRaw) ?? workspace.id
                 let created = SavedView(

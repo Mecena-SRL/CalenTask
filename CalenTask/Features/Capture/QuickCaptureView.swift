@@ -125,7 +125,7 @@ struct QuickCaptureView: View {
         let text = trimmedTitle
         guard !text.isEmpty else { return }
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             let target = WorkspaceScope.creationTarget(raw: scopeRaw, workspaces: workspaces) ?? workspace
             let task = TodoTask(
                 workspaceID: target.id,

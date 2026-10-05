@@ -1373,7 +1373,7 @@ struct CalendarScreen: View {
 
     private func createBlock(at slot: Date) {
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
             let event = TodoTask(
                 workspaceID: target.id,
@@ -1442,7 +1442,7 @@ struct CalendarScreen: View {
         isSyncing = true
         defer { isSyncing = false }
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: modelContext)
+            let (workspace, me) = try SeedService.identity(in: modelContext)
             await calendarSync.syncNow(
                 in: modelContext, workspaceID: workspace.id, createdBy: me.id
             )

@@ -67,6 +67,37 @@ struct DomainModelTests {
         #expect(teammate.deletedAt == nil)
     }
 
+    /// #12 — `identity` non rifà il seed se spazio e "me" salvati esistono;
+    /// la fusione dei doppioni "Personale" ripunta anche contatti e crew.
+    @Test func identityFastPathAndWorkspaceDedupeRepointsEverything() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (seeded, me) = try SeedService.ensureSeed(in: context)
+        let fast = try SeedService.identity(in: context)
+        #expect(fast.workspace.id == seeded.id)
+        #expect(fast.me.id == me.id)
+
+        let duplicate = Workspace(name: SeedService.personalName, isPersonal: true, colorHex: "#6E56CF")
+        duplicate.createdAt = seeded.createdAt.addingTimeInterval(60)
+        context.insert(duplicate)
+        let task = TodoTask(workspaceID: duplicate.id, title: "Doppione", createdByID: me.id)
+        let other = TodoTask(workspaceID: seeded.id, title: "Già a posto", createdByID: me.id)
+        let contact = Contact(workspaceID: duplicate.id, name: "Anna")
+        context.insert(task)
+        context.insert(other)
+        context.insert(contact)
+        try context.save()
+        SeedService.select(workspace: duplicate)
+
+        let (resolved, _) = try SeedService.ensureSeed(in: context)
+        #expect(resolved.id == seeded.id)
+        #expect(duplicate.deletedAt != nil)
+        #expect(task.workspaceID == seeded.id)
+        #expect(other.workspaceID == seeded.id)
+        #expect(contact.workspaceID == seeded.id)
+        #expect(try SeedService.identity(in: context).workspace.id == seeded.id)
+    }
+
     @Test func subtaskCascadeDelete() throws {
         let container = try makeContainer()
         let context = container.mainContext

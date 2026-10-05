@@ -41,7 +41,7 @@ enum CalendarActions {
     /// apre l'editor (i dettagli si mettono lì).
     static func createTask(start: Date, end: Date, in context: ModelContext, router: AppRouter) {
         do {
-            let (workspace, me) = try SeedService.ensureSeed(in: context)
+            let (workspace, me) = try SeedService.identity(in: context)
             let target = WorkspaceScope.creationTarget(in: context, fallback: workspace)
             let task = TodoTask(
                 workspaceID: target.id,

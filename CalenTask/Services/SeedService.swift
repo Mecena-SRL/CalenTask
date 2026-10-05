@@ -44,6 +44,18 @@ enum SeedService {
         return (current, me)
     }
 
+    /// #12 — per le creazioni: spazio corrente e "me" già salvati, senza
+    /// rifare a ogni nuova attività dedupe, membership e `save` del seed
+    /// completo (quello gira all'avvio e quando arrivano dati da iCloud).
+    /// Ripiega su `ensureSeed` se uno dei due manca (primo avvio, eliminato).
+    static func identity(in context: ModelContext) throws -> (workspace: Workspace, me: UserProfile) {
+        if let workspace = try currentWorkspace(in: context),
+           let me = try savedUser(in: context) {
+            return (workspace, me)
+        }
+        return try ensureSeed(in: context)
+    }
+
     /// Crea uno spazio di lavoro (la società, un team, un cliente) con la
     /// membership owner dell'utente corrente. Ritorna lo spazio creato.
     @discardableResult
@@ -65,6 +77,17 @@ enum SeedService {
             let id = UUID(uuidString: raw)
         else { return nil }
         let descriptor = FetchDescriptor<Workspace>(
+            predicate: #Predicate { $0.id == id && $0.deletedAt == nil }
+        )
+        return try context.fetch(descriptor).first
+    }
+
+    private static func savedUser(in context: ModelContext) throws -> UserProfile? {
+        guard
+            let raw = UserDefaults.standard.string(forKey: userDefaultsKey),
+            let id = UUID(uuidString: raw)
+        else { return nil }
+        let descriptor = FetchDescriptor<UserProfile>(
             predicate: #Predicate { $0.id == id && $0.deletedAt == nil }
         )
         return try context.fetch(descriptor).first
@@ -163,31 +186,41 @@ enum SeedService {
         }
     }
 
+    // #12 — il ripuntamento legge dallo store solo i record del doppione, non
+    // tutte le attività (e tutti gli altri record) dell'archivio.
     private static func repointWorkspace(
         from old: UUID, to new: UUID, in context: ModelContext
     ) throws {
-        for task in try context.fetch(FetchDescriptor<TodoTask>())
-        where task.workspaceID == old { task.workspaceID = new }
-        for project in try context.fetch(FetchDescriptor<Project>())
-        where project.workspaceID == old { project.workspaceID = new }
-        for tag in try context.fetch(FetchDescriptor<Tag>())
-        where tag.workspaceID == old { tag.workspaceID = new }
-        for stage in try context.fetch(FetchDescriptor<WorkflowStage>())
-        where stage.workspaceID == old { stage.workspaceID = new }
-        for rule in try context.fetch(FetchDescriptor<AutomationRule>())
-        where rule.workspaceID == old { rule.workspaceID = new }
-        for field in try context.fetch(FetchDescriptor<CustomFieldDefinition>())
-        where field.workspaceID == old { field.workspaceID = new }
-        for value in try context.fetch(FetchDescriptor<CustomFieldValue>())
-        where value.workspaceID == old { value.workspaceID = new }
-        for view in try context.fetch(FetchDescriptor<SavedView>())
-        where view.workspaceID == old { view.workspaceID = new }
-        for attachment in try context.fetch(FetchDescriptor<Attachment>())
-        where attachment.workspaceID == old { attachment.workspaceID = new }
-        for dependency in try context.fetch(FetchDescriptor<TaskDependency>())
-        where dependency.workspaceID == old { dependency.workspaceID = new }
-        for membership in try context.fetch(FetchDescriptor<Membership>())
-        where membership.workspaceID == old { membership.deletedAt = .now }
+        for task in try context.fetch(FetchDescriptor<TodoTask>(
+            predicate: #Predicate { $0.workspaceID == old })) { task.workspaceID = new }
+        for project in try context.fetch(FetchDescriptor<Project>(
+            predicate: #Predicate { $0.workspaceID == old })) { project.workspaceID = new }
+        for tag in try context.fetch(FetchDescriptor<Tag>(
+            predicate: #Predicate { $0.workspaceID == old })) { tag.workspaceID = new }
+        for stage in try context.fetch(FetchDescriptor<WorkflowStage>(
+            predicate: #Predicate { $0.workspaceID == old })) { stage.workspaceID = new }
+        for rule in try context.fetch(FetchDescriptor<AutomationRule>(
+            predicate: #Predicate { $0.workspaceID == old })) { rule.workspaceID = new }
+        for field in try context.fetch(FetchDescriptor<CustomFieldDefinition>(
+            predicate: #Predicate { $0.workspaceID == old })) { field.workspaceID = new }
+        for value in try context.fetch(FetchDescriptor<CustomFieldValue>(
+            predicate: #Predicate { $0.workspaceID == old })) { value.workspaceID = new }
+        for view in try context.fetch(FetchDescriptor<SavedView>(
+            predicate: #Predicate { $0.workspaceID == old })) { view.workspaceID = new }
+        for attachment in try context.fetch(FetchDescriptor<Attachment>(
+            predicate: #Predicate { $0.workspaceID == old })) { attachment.workspaceID = new }
+        for dependency in try context.fetch(FetchDescriptor<TaskDependency>(
+            predicate: #Predicate { $0.workspaceID == old })) { dependency.workspaceID = new }
+        // Contatti, crew e scene stavano fuori dall'elenco: restavano in uno
+        // spazio eliminato, invisibili.
+        for contact in try context.fetch(FetchDescriptor<Contact>(
+            predicate: #Predicate { $0.workspaceID == old })) { contact.workspaceID = new }
+        for crew in try context.fetch(FetchDescriptor<CrewAssignment>(
+            predicate: #Predicate { $0.workspaceID == old })) { crew.workspaceID = new }
+        for scene in try context.fetch(FetchDescriptor<ProductionScene>(
+            predicate: #Predicate { $0.workspaceID == old })) { scene.workspaceID = new }
+        for membership in try context.fetch(FetchDescriptor<Membership>(
+            predicate: #Predicate { $0.workspaceID == old })) { membership.deletedAt = .now }
         // Lo scope/preferenze puntavano al doppione? Riallinea.
         if UserDefaults.standard.string(forKey: workspaceDefaultsKey) == old.uuidString {
             UserDefaults.standard.set(new.uuidString, forKey: workspaceDefaultsKey)
@@ -197,20 +230,25 @@ enum SeedService {
     private static func repointUser(
         from old: UUID, to new: UUID, in context: ModelContext
     ) throws {
-        for task in try context.fetch(FetchDescriptor<TodoTask>()) {
-            if task.createdByID == old { task.createdByID = new }
-            if task.assigneeID == old { task.assigneeID = new }
-            if task.delegatedByID == old { task.delegatedByID = new }
-        }
-        for project in try context.fetch(FetchDescriptor<Project>())
-        where project.createdByID == old { project.createdByID = new }
+        // Predicati piccoli, uno per campo: una disgiunzione su tre campi, due
+        // opzionali, supera il limite del type-checker.
+        let optionalOld: UUID? = old
+        for task in try context.fetch(FetchDescriptor<TodoTask>(
+            predicate: #Predicate { $0.createdByID == old })) { task.createdByID = new }
+        for task in try context.fetch(FetchDescriptor<TodoTask>(
+            predicate: #Predicate { $0.assigneeID == optionalOld })) { task.assigneeID = new }
+        for task in try context.fetch(FetchDescriptor<TodoTask>(
+            predicate: #Predicate { $0.delegatedByID == optionalOld })) { task.delegatedByID = new }
+        for project in try context.fetch(FetchDescriptor<Project>(
+            predicate: #Predicate { $0.createdByID == old })) { project.createdByID = new }
+        // Le regole sono poche: filtrarle in memoria va bene.
         for rule in try context.fetch(FetchDescriptor<AutomationRule>()) {
             if rule.createTaskAssigneeID == old { rule.createTaskAssigneeID = new }
             if rule.assignToID == old { rule.assignToID = new }
             if rule.notifyUserID == old { rule.notifyUserID = new }
         }
-        for membership in try context.fetch(FetchDescriptor<Membership>())
-        where membership.userID == old { membership.deletedAt = .now }
+        for membership in try context.fetch(FetchDescriptor<Membership>(
+            predicate: #Predicate { $0.userID == old })) { membership.deletedAt = .now }
         if UserDefaults.standard.string(forKey: userDefaultsKey) == old.uuidString {
             UserDefaults.standard.set(new.uuidString, forKey: userDefaultsKey)
         }
