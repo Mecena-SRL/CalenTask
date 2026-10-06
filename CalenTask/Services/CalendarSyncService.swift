@@ -67,8 +67,10 @@ final class CalendarSyncService {
     func syncNow(in context: ModelContext, workspaceID: UUID, createdBy: UUID) async {
         guard await requestAccessIfNeeded() else { return }
         do {
-            try importEvents(in: context, workspaceID: workspaceID, createdBy: createdBy)
+            let events = await Self.fetchEvents(in: store, window: syncWindow)
+            try importEvents(events, in: context, workspaceID: workspaceID, createdBy: createdBy)
             try exportUnsyncedEvents(in: context)
+            try store.commit()
             try context.save()
             lastSyncAt = .now
             lastError = nil
@@ -79,12 +81,33 @@ final class CalendarSyncService {
 
     // MARK: Import
 
-    private func importEvents(in context: ModelContext, workspaceID: UUID, createdBy: UUID) throws {
+    /// #12 — La lettura della finestra (13 mesi, anche migliaia di eventi)
+    /// gira fuori dal main thread; sul main resta solo l'applicazione alle task.
+    /// In ordine di inizio: la prima occorrenza di ogni serie viene prima.
+    nonisolated private static func fetchEvents(
+        in store: EKEventStore, window: (start: Date, end: Date)
+    ) async -> [EKEvent] {
+        let box = EventKitBox(store: store, events: [])
+        return await Task.detached(priority: .utility) {
+            let store = box.store
+            let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: nil)
+            let events = store.events(matching: predicate)
+                .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+            return EventKitBox(store: store, events: events)
+        }.value.events
+    }
+
+    /// EKEventStore è thread-safe in lettura; gli EKEvent letti sullo sfondo
+    /// passano al main e da lì non tornano indietro.
+    private struct EventKitBox: @unchecked Sendable {
+        let store: EKEventStore
+        let events: [EKEvent]
+    }
+
+    private func importEvents(
+        _ events: [EKEvent], in context: ModelContext, workspaceID: UUID, createdBy: UUID
+    ) throws {
         let window = syncWindow
-        let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: nil)
-        // In ordine di inizio: la prima occorrenza di ogni serie viene prima.
-        let events = store.events(matching: predicate)
-            .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
 
         isApplyingRemote = true
         defer { isApplyingRemote = false }
@@ -355,24 +378,45 @@ final class CalendarSyncService {
 
         // #3 — coalescing: un DatePicker o un drag producono decine di
         // `touch()` al secondo; su EventKit ne arriva uno solo per task,
-        // a raffica finita.
-        let id = task.id
-        pendingPushes[id]?.cancel()
-        pendingPushes[id] = Task { [weak self] in
+        // a raffica finita. #12 — una sola scrittura per raffica: le task
+        // toccate insieme (spostamenti multipli, automazioni) finiscono in
+        // un unico `commit()` invece di un `save` sincrono ciascuna.
+        pendingPushes[task.id] = task
+        flushTask?.cancel()
+        flushTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, let self else { return }
-            self.pendingPushes[id] = nil
-            if task.deletedAt != nil {
-                self.removeRemoteEvent(for: task)
-                return
-            }
-            guard task.startAt != nil else { return }
-            try? self.push(task)
+            self.flushPendingPushes()
         }
     }
 
     @ObservationIgnored
-    private var pendingPushes: [UUID: Task<Void, Never>] = [:]
+    private var pendingPushes: [UUID: TodoTask] = [:]
+    @ObservationIgnored
+    private var flushTask: Task<Void, Never>?
+
+    private func flushPendingPushes() {
+        let tasks = pendingPushes.values
+        pendingPushes = [:]
+        flushTask = nil
+        for task in tasks {
+            do {
+                if task.deletedAt != nil {
+                    try removeRemoteEvent(for: task)
+                } else if task.startAt != nil {
+                    try push(task)
+                }
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+        do {
+            try store.commit()
+        } catch {
+            lastError = error.localizedDescription
+            store.reset()
+        }
+    }
 
     /// #1 — this device's own event ↔ task links (never synced).
     @ObservationIgnored
@@ -382,6 +426,7 @@ final class CalendarSyncService {
         guard let startAt = task.startAt else { return }
         let event: EKEvent
         let span: EKSpan
+        var isNew = false
         let linkedKey = links.eventIdentifier(forTask: task.id)
         if let existing = localEvent(for: task) {
             event = existing.event
@@ -393,6 +438,7 @@ final class CalendarSyncService {
             return
         } else {
             span = .futureEvents
+            isNew = true
             event = EKEvent(eventStore: store)
             event.calendar = task.calendarIdentifier
                 .flatMap { store.calendar(withIdentifier: $0) }
@@ -426,7 +472,9 @@ final class CalendarSyncService {
             }
         }
 
-        try store.save(event, span: span)
+        // #12 — le modifiche aspettano il `commit()` del batch; un evento
+        // nuovo si salva subito, perché serve il suo `eventIdentifier`.
+        try store.save(event, span: span, commit: isNew)
         if span == .futureEvents, let identifier = event.eventIdentifier {
             links.link(event: identifier, to: task.id)
         }
@@ -440,10 +488,10 @@ final class CalendarSyncService {
         }
     }
 
-    private func removeRemoteEvent(for task: TodoTask) {
+    private func removeRemoteEvent(for task: TodoTask) throws {
         guard let local = localEvent(for: task) else { return }
         let key = links.eventIdentifier(forTask: task.id)
-        try? store.remove(local.event, span: local.span)   // #2 — un'occorrenza: solo lei
+        try store.remove(local.event, span: local.span, commit: false)   // #2 — un'occorrenza: solo lei
         if let key { links.unlink(event: key) }
     }
 
