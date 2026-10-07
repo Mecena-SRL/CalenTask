@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftData
 
 /// #17 — Salvataggi e letture che non ingoiano l'errore. Con `try?` un
