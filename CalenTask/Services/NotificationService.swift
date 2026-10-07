@@ -44,9 +44,14 @@ final class NotificationService {
     /// (create su un altro dispositivo, dove `touch()` non è passato da qui) e
     /// i reinstalli. Tiene solo le più vicine, entro il limite di sistema.
     func resyncAll(in context: ModelContext) {
-        guard let tasks = try? context.fetch(
-            FetchDescriptor<TodoTask>(predicate: TodoTask.openPredicate)
-        ) else { return }
+        // Se la lettura fallisce si esce: con `[]` si cancellerebbero tutti gli avvisi.
+        let tasks: [TodoTask]
+        do {
+            tasks = try context.fetch(FetchDescriptor<TodoTask>(predicate: TodoTask.openPredicate))
+        } catch {
+            Log.store.error("Riallineamento notifiche saltato: \(String(describing: error), privacy: .public)")
+            return
+        }
         let now = Date.now
         let planned = tasks
             .flatMap { Self.plannedRequests(for: NotificationPlan(task: $0), now: now) }
@@ -64,7 +69,7 @@ final class NotificationService {
             await requestAuthorizationIfNeeded()
             for item in planned {
                 guard generation == resyncGeneration else { return }
-                try? await center.add(item.request)
+                await schedule(item.request)
             }
         }
     }
@@ -80,11 +85,26 @@ final class NotificationService {
         )
         Task {
             await requestAuthorizationIfNeeded()
-            try? await center.add(request)
+            await schedule(request)
         }
     }
 
     // MARK: Internals
+
+    /// #17 — Programma la richiesta; un rifiuto del sistema finisce nel log
+    /// (prima `try?` lo ingoiava). Le notifiche negate dall'utente non sono
+    /// un errore: niente log, sarebbe una riga per ogni attività.
+    private func schedule(_ request: UNNotificationRequest) async {
+        do {
+            try await center.add(request)
+        } catch let error as UNError where error.code == .notificationsNotAllowed {
+            return
+        } catch {
+            Log.app.error(
+                "Notifica \(request.identifier, privacy: .public) non programmata: \(String(describing: error), privacy: .public)"
+            )
+        }
+    }
 
     private struct NotificationPlan {
         let taskID: UUID
@@ -130,7 +150,7 @@ final class NotificationService {
         await requestAuthorizationIfNeeded()
         for item in planned {
             guard generations[plan.taskID] == generation else { return }
-            try? await center.add(item.request)
+            await schedule(item.request)
         }
     }
 
@@ -274,7 +294,7 @@ final class NotificationService {
         )
         Task {
             await requestAuthorizationIfNeeded()
-            try? await center.add(request)
+            await schedule(request)
         }
     }
 }

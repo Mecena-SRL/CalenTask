@@ -193,9 +193,9 @@ enum CaptureApplier {
         _ parsed: CaptureParser.Result, in context: ModelContext, workspaceID: UUID
     ) -> Project? {
         guard let query = parsed.projectQuery, !query.isEmpty else { return nil }
-        let projects = (try? context.fetch(FetchDescriptor<Project>(
+        let projects = context.fetchOrLog(FetchDescriptor<Project>(
             predicate: #Predicate { $0.deletedAt == nil }
-        ))) ?? []
+        ))
         return projects.first { $0.name.localizedCaseInsensitiveContains(query) }
     }
 }

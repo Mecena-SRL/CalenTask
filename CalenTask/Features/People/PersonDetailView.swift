@@ -34,7 +34,7 @@ struct PersonDetailView: View {
         let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate {
             taskIDs.contains($0.id) && $0.deletedAt == nil
         })
-        return ((try? modelContext.fetch(descriptor)) ?? [])
+        return modelContext.fetchOrLog(descriptor)
             .sorted { ($0.startAt ?? $0.dueAt ?? .distantPast)
                     > ($1.startAt ?? $1.dueAt ?? .distantPast) }
     }

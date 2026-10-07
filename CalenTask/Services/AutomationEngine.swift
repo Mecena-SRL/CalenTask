@@ -85,7 +85,7 @@ enum AutomationEngine {
 
         // 3. Notify a person (local notification on this device, v1).
         if let notifyID = rule.notifyUserID {
-            let person = try? context.fetch(FetchDescriptor<UserProfile>(
+            let person = context.fetchOrLog(FetchDescriptor<UserProfile>(
                 predicate: #Predicate { $0.id == notifyID }
             )).first
             NotificationService.shared.postAutomationNotice(
@@ -105,6 +105,6 @@ enum AutomationEngine {
                 && $0.deletedAt == nil && $0.statusRaw != doneRaw
         })
         let projectID = project?.id
-        return ((try? context.fetch(descriptor)) ?? []).contains { $0.project?.id == projectID }
+        return context.fetchOrLog(descriptor).contains { $0.project?.id == projectID }
     }
 }
