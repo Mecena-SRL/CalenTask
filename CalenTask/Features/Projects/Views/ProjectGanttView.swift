@@ -986,9 +986,11 @@ private struct GanttHeader: View {
         var bands: [MonthBand] = []
         var offset = 0
         while offset < days {
-            let day = calendar.date(byAdding: .day, value: offset, to: range.lowerBound)!
-            let monthEnd = calendar.dateInterval(of: .month, for: day)!.end
-            let remaining = calendar.dateComponents([.day], from: day, to: monthEnd).day ?? 1
+            // Niente force unwrap: se il calendario non risolve la data si chiude
+            // con una banda di un giorno invece di andare in crash.
+            guard let day = calendar.date(byAdding: .day, value: offset, to: range.lowerBound) else { break }
+            let monthEnd = calendar.dateInterval(of: .month, for: day)?.end
+            let remaining = monthEnd.flatMap { calendar.dateComponents([.day], from: day, to: $0).day } ?? 1
             let span = min(remaining, days - offset)
             bands.append(MonthBand(
                 id: offset,
