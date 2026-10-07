@@ -24,7 +24,7 @@ enum DSPalette {
         Swatch(name: "Ardesia", hex: "#64748B"),
     ]
 
-    static var randomHex: String { swatches.randomElement()!.hex }
+    static var randomHex: String { swatches.randomElement()?.hex ?? "#3E63DD" }
 }
 
 /// Griglia di scelta colore riusabile (spazi, progetti): swatch tondi,

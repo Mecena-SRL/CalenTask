@@ -90,7 +90,7 @@ struct CustomFieldValueRow: View {
                     }
                 }
             } label: {
-                Text(value?.valueRaw.isEmpty == false ? value!.valueRaw : "Scegli")
+                Text(value.flatMap { $0.valueRaw.isEmpty ? nil : $0.valueRaw } ?? "Scegli")
                     .font(.dsMeta)
                     .foregroundStyle(hasContent ? Color.indigo : Color.secondary)
                     .padding(.horizontal, DS.s)
