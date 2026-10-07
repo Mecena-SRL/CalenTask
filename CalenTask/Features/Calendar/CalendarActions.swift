@@ -13,7 +13,7 @@ enum CalendarActions {
     static func reschedule(taskID idString: String, to day: Date,
                            in context: ModelContext, calendar: Calendar) -> Bool {
         guard let id = UUID(uuidString: idString),
-              let task = try? context.fetch(
+              let task = context.fetchOrLog(
                 FetchDescriptor<TodoTask>(predicate: #Predicate { $0.id == id })
               ).first,
               let anchor = task.startAt ?? task.dueAt
@@ -52,7 +52,7 @@ enum CalendarActions {
                 createdByID: me.id
             )
             context.insert(task)
-            try? context.save()
+            context.saveOrLog()
             NotificationService.shared.sync(task: task)
             #if os(macOS)
             router.inspect(taskID: task.id)

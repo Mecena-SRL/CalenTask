@@ -1251,6 +1251,40 @@ struct DomainModelTests {
         #expect(try titles(nil) == ["Recente", "Al limite", "Altro spazio"])
     }
 
+    /// #5/#17 — conflitti di produzione filtrati nello store: solo le altre
+    /// convocazioni dello stesso contatto nello stesso giorno, vive.
+    @Test func conflictsFilterSameDayAssignmentsInStore() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (workspace, me) = try SeedService.ensureSeed(in: context)
+        let calendar = Calendar.current
+        let day = calendar.date(from: DateComponents(year: 2026, month: 10, day: 7, hour: 9))!
+        func add(_ title: String, startAt: Date?) -> TodoTask {
+            let task = TodoTask(workspaceID: workspace.id, title: title, startAt: startAt, createdByID: me.id)
+            context.insert(task)
+            return task
+        }
+        let shootDay = add("Ripresa", startAt: day)
+        let sameDay = add("Stesso giorno", startAt: day.addingTimeInterval(6 * 3600))
+        let nextDay = add("Giorno dopo", startAt: calendar.date(byAdding: .day, value: 1, to: day))
+        let undated = add("Senza data", startAt: nil)
+        let deleted = add("Cancellata", startAt: day)
+        deleted.deletedAt = .now
+        let contactID = UUID()
+        let otherContactID = UUID()
+        for task in [shootDay, sameDay, nextDay, undated, deleted] {
+            context.insert(CrewAssignment(workspaceID: workspace.id, contactID: contactID, taskID: task.id))
+        }
+        context.insert(CrewAssignment(workspaceID: workspace.id, contactID: otherContactID, taskID: shootDay.id))
+        try context.save()
+
+        let conflicts = ConflictService.conflicts(
+            contactID: contactID, day: day, excludingTaskID: shootDay.id, in: context
+        )
+        #expect(conflicts.map(\.title) == ["Stesso giorno"])
+        #expect(ConflictService.conflictedContactIDs(for: shootDay, in: context) == [contactID])
+    }
+
     @Test func freeSlotsSkipBusyIntervals() throws {
         let container = try makeContainer()
         let context = container.mainContext

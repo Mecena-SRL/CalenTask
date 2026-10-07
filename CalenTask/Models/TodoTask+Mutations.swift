@@ -289,7 +289,7 @@ extension TodoTask {
             $0.title == title && $0.deletedAt == nil && $0.statusRaw != doneRaw
                 && $0.recurrenceFrequencyRaw == frequencyRaw && $0.id != ownID
         })
-        let candidates = (try? context.fetch(descriptor)) ?? []
+        let candidates = context.fetchOrLog(descriptor)
         let projectID = project?.id
         return candidates.contains {
             $0.dueAt == due && $0.startAt == start && $0.project?.id == projectID

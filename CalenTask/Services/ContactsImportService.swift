@@ -141,7 +141,7 @@ enum ContactsImportService {
             return false
         }
         update(contact, from: deviceContact)
-        try? context.save()
+        context.saveOrLog()
         return true
     }
 }

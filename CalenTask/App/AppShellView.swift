@@ -221,7 +221,7 @@ struct AppShellView: View {
         // store; modelli e fasi si scartano in memoria come nel pannello Oggi.
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: fireDay) ?? fireDay
         func fetch(_ predicate: Predicate<TodoTask>) -> [TodoTask] {
-            ((try? modelContext.fetch(FetchDescriptor(predicate: predicate))) ?? [])
+            modelContext.fetchOrLog(FetchDescriptor(predicate: predicate))
                 .filter { !$0.isTemplate && $0.kind != .phase }
         }
         let starting = fetch(TodoTask.openStartingPredicate(from: fireDay, to: dayEnd, workspaceID: nil))

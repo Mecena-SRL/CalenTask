@@ -429,7 +429,7 @@ struct SceneEditorView: View {
             created.shootDayID = shootDayID
             modelContext.insert(created)
         }
-        try? modelContext.save()
+        modelContext.saveOrLog()
         dismiss()
     }
 }

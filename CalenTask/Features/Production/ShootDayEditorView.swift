@@ -83,7 +83,7 @@ struct ShootDayEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Fine") {
                         shootDay.touch()
-                        try? modelContext.save()
+                        modelContext.saveOrLog()
                         dismiss()
                     }
                 }

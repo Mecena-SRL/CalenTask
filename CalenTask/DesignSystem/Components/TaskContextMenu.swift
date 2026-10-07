@@ -216,12 +216,20 @@ private struct TaskMenuItems: View {
         Divider()
 
         Button {
-            try? TemplateService.duplicate(task, in: modelContext)
+            do {
+                try TemplateService.duplicate(task, in: modelContext)
+            } catch {
+                reportFailure("Duplicazione fallita: \(error)")
+            }
         } label: {
             Label("Duplica", systemImage: "plus.square.on.square")
         }
         Button {
-            try? TemplateService.makeTemplate(from: task, in: modelContext)
+            do {
+                try TemplateService.makeTemplate(from: task, in: modelContext)
+            } catch {
+                reportFailure("Salvataggio come modello fallito: \(error)")
+            }
         } label: {
             Label("Salva come modello", systemImage: "square.on.square.dashed")
         }
