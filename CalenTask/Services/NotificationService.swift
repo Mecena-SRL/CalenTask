@@ -53,11 +53,7 @@ final class NotificationService {
             Log.store.error("Riallineamento notifiche saltato: \(String(describing: error), privacy: .public)")
             return
         }
-        let now = Date.now
-        let planned = tasks
-            .flatMap { Self.plannedRequests(for: NotificationPlan(task: $0), now: now) }
-            .sorted { $0.fireDate < $1.fireDate }
-            .prefix(Self.maxPendingTaskRequests)
+        let planned = Self.nearestRequests(for: tasks, now: .now)
         resyncGeneration += 1
         let generation = resyncGeneration
         Task {
@@ -159,6 +155,19 @@ final class NotificationService {
     static func plannedSchedule(for task: TodoTask, now: Date = .now) -> [(id: String, fireDate: Date)] {
         plannedRequests(for: NotificationPlan(task: task), now: now)
             .map { ($0.request.identifier, $0.fireDate) }
+    }
+
+    /// Identificatori e orari che `resyncAll` programmerebbe ora (per i test).
+    static func resyncSchedule(for tasks: [TodoTask], now: Date = .now) -> [(id: String, fireDate: Date)] {
+        nearestRequests(for: tasks, now: now).map { ($0.request.identifier, $0.fireDate) }
+    }
+
+    /// Le richieste più vicine di tutte le attività, entro il limite di sistema.
+    private static func nearestRequests(for tasks: [TodoTask], now: Date) -> [PlannedRequest] {
+        Array(tasks
+            .flatMap { plannedRequests(for: NotificationPlan(task: $0), now: now) }
+            .sorted { $0.fireDate < $1.fireDate }
+            .prefix(maxPendingTaskRequests))
     }
 
     private static func plannedRequests(for plan: NotificationPlan, now: Date) -> [PlannedRequest] {

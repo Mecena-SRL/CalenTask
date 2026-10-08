@@ -431,10 +431,7 @@ final class CalendarSyncService {
         if let existing = localEvent(for: task) {
             event = existing.event
             span = existing.span
-        } else if linkedKey.flatMap(EventLinkRegistry.occurrence(fromKey:)) != nil
-                    || (task.eventIdentifier != nil && linkedKey == nil) {
-            // #1 — linked to ANOTHER device's event that isn't here (yet), or
-            // #2 an occurrence not found: a new event would be a duplicate.
+        } else if !Self.mayCreateEvent(linkedKey: linkedKey, syncedIdentifier: task.eventIdentifier) {
             return
         } else {
             span = .futureEvents
@@ -486,6 +483,14 @@ final class CalendarSyncService {
         if task.calendarIdentifier == nil {
             task.calendarIdentifier = event.calendar?.calendarIdentifier
         }
+    }
+
+    /// #1 — Se l'evento locale manca, crearne uno nuovo è lecito solo se la
+    /// task non è collegata a un evento di un ALTRO dispositivo (non ancora
+    /// arrivato qui) e #2 non è un'occorrenza non trovata: sarebbe un doppione.
+    static func mayCreateEvent(linkedKey: String?, syncedIdentifier: String?) -> Bool {
+        if linkedKey.flatMap(EventLinkRegistry.occurrence(fromKey:)) != nil { return false }
+        return syncedIdentifier == nil || linkedKey != nil
     }
 
     private func removeRemoteEvent(for task: TodoTask) throws {
