@@ -12,7 +12,12 @@ enum NaturalDateParser {
         let cleanedText: String
     }
 
+    /// #64 — oltre questa lunghezza il testo non è una frase di cattura: niente
+    /// regex né data detector (evita costi superlineari su input enormi).
+    static let maxInputLength = 500
+
     static func parse(_ text: String, now: Date = .now, calendar: Calendar = .current) -> Match? {
+        guard text.count <= maxInputLength else { return nil }
         if let italian = parseItalian(text, now: now, calendar: calendar) {
             return italian
         }
