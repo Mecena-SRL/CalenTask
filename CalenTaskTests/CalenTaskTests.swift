@@ -506,6 +506,11 @@ struct DomainModelTests {
         #expect(tagCount == 2)  // "montaggio" survives as a workspace tag
     }
 
+    @Test func naturalDateParserIgnoraTestiTroppoLunghi() {
+        let long = "domani " + String(repeating: "a", count: NaturalDateParser.maxInputLength)
+        #expect(NaturalDateParser.parse(long) == nil)
+    }
+
     @Test func italianRelativeDateParsing() throws {
         let calendar = Calendar.current
         let now = calendar.date(from: DateComponents(year: 2026, month: 6, day: 10, hour: 10))!
