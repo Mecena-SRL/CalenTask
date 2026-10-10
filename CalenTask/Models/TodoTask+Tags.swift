@@ -3,15 +3,15 @@ import Foundation
 /// #hashtag support (D21): labels typed inline in title or notes.
 /// A tag is a single `#word` (letters, numbers, _ , -), case-insensitive.
 enum HashtagParser {
-    private static let pattern = try! Regex(#"#([\p{L}\p{N}_\-]+)"#)
+    // Letterale regex: verificato a compile-time, niente try! (#68).
+    private static let pattern = #/#([\p{L}\p{N}_\-]+)/#
 
     /// Ordered, deduplicated, lowercased tag names found in the text.
     static func tagNames(in text: String) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
         for match in text.matches(of: pattern) {
-            guard let range = match[1].range else { continue }
-            let name = String(text[range]).lowercased()
+            let name = String(match.1).lowercased()
             if seen.insert(name).inserted {
                 result.append(name)
             }
