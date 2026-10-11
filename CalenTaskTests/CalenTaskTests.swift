@@ -1362,4 +1362,9 @@ struct DomainModelTests {
         #expect(carla.contactIdentifier == "CN-CARLA")
         #expect(carla.notes == "Studio Neri")
     }
+
+    @Test func titoloTroppoLungoVieneTroncato() {
+        let task = TodoTask(workspaceID: UUID(), title: String(repeating: "a", count: 2_000), createdByID: UUID())
+        #expect(task.title.count == TodoTask.maxTitleLength)
+    }
 }
