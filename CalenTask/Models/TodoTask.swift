@@ -192,6 +192,13 @@ final class TodoTask {
         }
     }
 
+    /// Lunghezza massima del titolo (difesa da input enormi, #64).
+    static let maxTitleLength = 500
+
+    static func clampedTitle(_ title: String) -> String {
+        title.count <= maxTitleLength ? title : String(title.prefix(maxTitleLength))
+    }
+
     init(
         id: UUID = UUID(),
         workspaceID: UUID,
@@ -220,7 +227,7 @@ final class TodoTask {
     ) {
         self.id = id
         self.workspaceID = workspaceID
-        self.title = title
+        self.title = Self.clampedTitle(title)
         self.notes = notes
         self.kindRaw = kind.rawValue
         self.statusRaw = status.rawValue
