@@ -1367,4 +1367,13 @@ struct DomainModelTests {
         let task = TodoTask(workspaceID: UUID(), title: String(repeating: "a", count: 2_000), createdByID: UUID())
         #expect(task.title.count == TodoTask.maxTitleLength)
     }
+
+    @Test func payloadJSONOltreIlLimiteVieneRifiutato() throws {
+        let ok = try JSONPayload.decode([Int].self, from: Data("[1,2]".utf8))
+        #expect(ok == [1, 2])
+        let big = Data(repeating: 0x20, count: JSONPayload.maxBytes + 1)
+        #expect(throws: JSONPayload.TooLarge.self) {
+            try JSONPayload.decode([Int].self, from: big)
+        }
+    }
 }

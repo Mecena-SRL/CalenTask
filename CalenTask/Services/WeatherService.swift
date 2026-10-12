@@ -91,7 +91,7 @@ final class WeatherService: NSObject {
 
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            let response = try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
+            let response = try JSONPayload.decode(OpenMeteoResponse.self, from: data)
             apply(days: response.dayForecasts)
             lastFetchAt = .now
             saveCache()
