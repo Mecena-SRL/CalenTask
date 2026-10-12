@@ -261,7 +261,7 @@ final class UpdateService {
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             let (data, response) = try await URLSession.shared.data(for: request)
             try Self.validate(response)
-            let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
+            let releases = try JSONPayload.decode([GitHubRelease].self, from: data)
             lastCheckAt = .now
             if let update = UpdateMath.latestUpdate(
                 in: releases, channel: channel,
