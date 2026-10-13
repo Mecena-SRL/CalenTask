@@ -199,6 +199,13 @@ final class TodoTask {
         title.count <= maxTitleLength ? title : String(title.prefix(maxTitleLength))
     }
 
+    /// Lunghezza massima delle note (#64).
+    static let maxNotesLength = 20_000
+
+    static func clampedNotes(_ notes: String) -> String {
+        notes.count <= maxNotesLength ? notes : String(notes.prefix(maxNotesLength))
+    }
+
     init(
         id: UUID = UUID(),
         workspaceID: UUID,
@@ -228,7 +235,7 @@ final class TodoTask {
         self.id = id
         self.workspaceID = workspaceID
         self.title = Self.clampedTitle(title)
-        self.notes = notes
+        self.notes = Self.clampedNotes(notes)
         self.kindRaw = kind.rawValue
         self.statusRaw = status.rawValue
         self.priorityRaw = priority.rawValue
