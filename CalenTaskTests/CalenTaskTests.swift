@@ -1373,6 +1373,12 @@ struct DomainModelTests {
         #expect(task.notes.count == TodoTask.maxNotesLength)
     }
 
+    @Test func progettoNomeENoteVengonoTroncati() {
+        let project = Project(workspaceID: UUID(), name: String(repeating: "a", count: 900), notes: String(repeating: "n", count: 30_000), createdByID: UUID())
+        #expect(project.name.count == Project.maxNameLength)
+        #expect(project.notes.count == Project.maxNotesLength)
+    }
+
     @Test func payloadJSONOltreIlLimiteVieneRifiutato() throws {
         let ok = try JSONPayload.decode([Int].self, from: Data("[1,2]".utf8))
         #expect(ok == [1, 2])
