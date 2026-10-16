@@ -95,6 +95,14 @@ final class Project {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    /// Limiti di lunghezza di nome e note (#64).
+    static let maxNameLength = 500
+    static let maxNotesLength = 20_000
+
+    static func clamped(_ text: String, max: Int) -> String {
+        text.count <= max ? text : String(text.prefix(max))
+    }
+
     init(
         id: UUID = UUID(),
         workspaceID: UUID,
@@ -110,8 +118,8 @@ final class Project {
     ) {
         self.id = id
         self.workspaceID = workspaceID
-        self.name = name
-        self.notes = notes
+        self.name = Self.clamped(name, max: Self.maxNameLength)
+        self.notes = Self.clamped(notes, max: Self.maxNotesLength)
         self.statusRaw = status.rawValue
         self.colorHex = colorHex
         self.startDate = startDate
