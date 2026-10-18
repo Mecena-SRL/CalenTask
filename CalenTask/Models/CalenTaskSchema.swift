@@ -170,3 +170,13 @@ enum CalenTaskSchemaV11: VersionedSchema {
         CalenTaskSchemaV2.models
     }
 }
+
+/// V12 (#5): aggiunge `#Index` su `TodoTask` (`deletedAt`+`statusRaw`,
+/// `workspaceID`, `startAt`, `dueAt`). Nessuna proprietà nuova.
+enum CalenTaskSchemaV12: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(12, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        CalenTaskSchemaV2.models
+    }
+}

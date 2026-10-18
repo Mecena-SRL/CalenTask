@@ -4,8 +4,11 @@ import SwiftData
 // The unified core entity: todo + calendar event + reminder + phase container.
 // Named TodoTask because `Task` collides with _Concurrency.Task.
 // Maps to future Supabase table `tasks`.
+// #5: indici sui campi dei predicati di dominio (`TodoTask+Predicates`).
 @Model
 final class TodoTask {
+    #Index<TodoTask>([\.deletedAt, \.statusRaw], [\.workspaceID], [\.startAt], [\.dueAt])
+
     var id: UUID = UUID()
     var workspaceID: UUID = UUID()
     var title: String = ""
