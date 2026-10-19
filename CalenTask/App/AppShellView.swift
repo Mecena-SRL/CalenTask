@@ -180,6 +180,16 @@ struct AppShellView: View {
             NotificationService.shared.resyncAll(in: modelContext)
             scheduleDigest()
         }
+        // #14 — anche le modifiche locali raggiungono il widget con l'app in
+        // primo piano (es. widget sul desktop di macOS), con debounce: il
+        // refresh legge soltanto, quindi non genera altri salvataggi.
+        .onReceive(
+            NotificationCenter.default
+                .publisher(for: ModelContext.didSave)
+                .debounce(for: .seconds(5), scheduler: RunLoop.main)
+        ) { _ in
+            WidgetBridge.refresh(in: modelContext)
+        }
     }
 
     private struct TaskRef: Identifiable {
