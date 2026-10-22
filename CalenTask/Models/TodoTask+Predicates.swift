@@ -26,6 +26,16 @@ extension TodoTask {
         }
     }
 
+    /// Attività aperte assegnate a una persona (per i contatori di carico).
+    static func openAssignedPredicate(assigneeID: UUID) -> Predicate<TodoTask> {
+        let doneRaw = TaskStatus.done.rawValue
+        let phaseRaw = TaskKind.phase.rawValue
+        return #Predicate<TodoTask> { task in
+            task.assigneeID == assigneeID && task.deletedAt == nil
+                && task.statusRaw != doneRaw && task.kindRaw != phaseRaw && !task.isTemplate
+        }
+    }
+
     static func inboxPredicate(workspaceID: UUID?) -> Predicate<TodoTask> {
         let doneRaw = TaskStatus.done.rawValue
         let phaseRaw = TaskKind.phase.rawValue
