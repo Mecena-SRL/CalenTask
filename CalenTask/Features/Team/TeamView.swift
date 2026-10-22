@@ -11,14 +11,10 @@ struct TeamView: View {
            sort: \UserProfile.createdAt)
     private var people: [UserProfile]
 
-    @Query(filter: TodoTask.openPredicate)
-    private var openTasks: [TodoTask]
-
-    /// Attività aperte per persona, contate in un solo passaggio.
-    private var loadByPerson: [UUID: Int] {
-        openTasks.reduce(into: [:]) { counts, task in
-            if let id = task.assigneeID { counts[id, default: 0] += 1 }
-        }
+    /// Attività aperte di una persona, contate nello store.
+    private func load(for person: UserProfile) -> Int {
+        let predicate = TodoTask.openAssignedPredicate(assigneeID: person.id)
+        return (try? modelContext.fetchCount(FetchDescriptor<TodoTask>(predicate: predicate))) ?? 0
     }
 
     @State private var newName = ""
@@ -26,7 +22,6 @@ struct TeamView: View {
 
     var body: some View {
         NavigationStack {
-            let load = loadByPerson
             List {
                 ForEach(people, id: \.id) { person in
                     HStack(spacing: DS.m) {
@@ -41,7 +36,8 @@ struct TeamView: View {
                             }
                         }
                         Spacer()
-                        if let count = load[person.id], count > 0 {
+                        let count = load(for: person)
+                        if count > 0 {
                             Text("\(count) attività")
                                 .font(.dsNumeric)
                                 .foregroundStyle(.secondary)

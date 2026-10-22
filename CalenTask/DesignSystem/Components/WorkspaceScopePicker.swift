@@ -165,7 +165,7 @@ struct WorkspaceScopePicker: View {
         .buttonStyle(.plain)
         .dsHoverHighlight()
         .popover(isPresented: $showsSwitcher, arrowEdge: .bottom) {
-            OpenCountsReader { counts, total in
+            OpenCountsReader(workspaceIDs: workspaces.map(\.id)) { counts, total in
                 switcherPopover(counts: counts, total: total)
             }
         }
@@ -299,16 +299,23 @@ struct WorkspaceScopePicker: View {
     .modelContainer(PreviewSampleData.make().container)
 }
 
-/// #5 — I contatori per spazio servono solo a popover aperto: la query di
-/// tutte le attività aperte vive qui, non in ogni selettore montato.
+/// #5 — I contatori per spazio servono solo a popover aperto e si calcolano
+/// con `fetchCount` nello store, senza caricare le attività.
 private struct OpenCountsReader<Content: View>: View {
-    @Query(filter: TodoTask.openPredicate) private var openTasks: [TodoTask]
+    @Environment(\.modelContext) private var modelContext
+    let workspaceIDs: [UUID]
     let content: (_ byWorkspace: [UUID: Int], _ total: Int) -> Content
 
     var body: some View {
-        content(
-            openTasks.reduce(into: [:]) { $0[$1.workspaceID, default: 0] += 1 },
-            openTasks.count
-        )
+        let total = count(TodoTask.openPredicate)
+        var byWorkspace: [UUID: Int] = [:]
+        for id in workspaceIDs {
+            byWorkspace[id] = count(TodoTask.openPredicate(workspaceID: id))
+        }
+        return content(byWorkspace, total)
+    }
+
+    private func count(_ predicate: Predicate<TodoTask>) -> Int {
+        (try? modelContext.fetchCount(FetchDescriptor<TodoTask>(predicate: predicate))) ?? 0
     }
 }
