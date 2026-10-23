@@ -38,7 +38,7 @@ enum WorkspaceScope {
         let descriptor = FetchDescriptor<Workspace>(
             predicate: #Predicate { $0.id == id && $0.deletedAt == nil }
         )
-        return (try? context.fetch(descriptor).first) ?? fallback
+        return context.fetchOrLog(descriptor).first ?? fallback
     }
 
     static func creationTarget(raw: String, workspaces: [Workspace]) -> Workspace? {

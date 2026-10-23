@@ -37,6 +37,6 @@ struct TaskDeepLinkView: View {
             predicate: #Predicate { $0.id == id && $0.deletedAt == nil }
         )
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
+        return modelContext.fetchOrLog(descriptor).first
     }
 }
