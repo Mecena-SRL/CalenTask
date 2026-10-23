@@ -313,7 +313,7 @@ private struct BoardColumn: View {
 
     private func fetchTask(_ id: UUID) -> TodoTask? {
         let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate { $0.id == id })
-        return try? modelContext.fetch(descriptor).first
+        return modelContext.fetchOrLog(descriptor).first
     }
 
     private func addTask() {

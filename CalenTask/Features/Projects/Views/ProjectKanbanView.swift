@@ -248,7 +248,7 @@ private struct KanbanColumn: View {
     private func handleDrop(_ items: [String], before target: TodoTask? = nil) -> Bool {
         guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
         let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate<TodoTask> { $0.id == id })
-        guard let task = try? modelContext.fetch(descriptor).first,
+        guard let task = modelContext.fetchOrLog(descriptor).first,
               task.id != target?.id else { return false }
         withAnimation(.dsSoft) {
             switch mode {
