@@ -46,7 +46,7 @@ final class WeatherService: NSObject {
 
     func forecast(for date: Date) -> DayForecast? {
         guard isEnabled else { return nil }
-        return byDay[Calendar.current.startOfDay(for: date)]
+        return byDay[Calendar.app.startOfDay(for: date)]
     }
 
     /// Aggiorna se la cache è più vecchia di 3 ore. Chiede il permesso
@@ -218,7 +218,7 @@ private struct OpenMeteoResponse: Decodable {
                 daily.temperature_2m_min.indices.contains(index)
             else { return nil }
             return WeatherService.DayForecast(
-                day: Calendar.current.startOfDay(for: date),
+                day: Calendar.app.startOfDay(for: date),
                 weatherCode: daily.weather_code[index],
                 tMax: daily.temperature_2m_max[index],
                 tMin: daily.temperature_2m_min[index]

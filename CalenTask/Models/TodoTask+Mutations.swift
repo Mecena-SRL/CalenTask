@@ -120,7 +120,7 @@ extension TodoTask {
     @MainActor
     func spawnNextOccurrence() {
         guard let frequency = recurrenceFrequency, let context = modelContext else { return }
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         // #8 — l'ancora è la data di riferimento della PRIMA occorrenza; se
         // la serie è stata spostata a mano a un altro giorno, riparte da lì.
         let seriesAnchor = Self.effectiveAnchor(

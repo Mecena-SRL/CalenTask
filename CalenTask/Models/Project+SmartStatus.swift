@@ -28,12 +28,12 @@ extension Project {
     var smartStatus: ProjectSmartStatus {
         let open = tasks.filter { $0.deletedAt == nil && !$0.isDone && !$0.isTemplate }
         guard !open.isEmpty else { return .onTrack }
-        let today = Calendar.current.startOfDay(for: .now)
+        let today = Calendar.app.startOfDay(for: .now)
 
         if open.contains(where: { ($0.dueAt ?? .distantFuture) < today }) {
             return .late
         }
-        let soon = Calendar.current.date(byAdding: .day, value: 3, to: today) ?? today
+        let soon = Calendar.app.date(byAdding: .day, value: 3, to: today) ?? today
         let dueSoon = open.filter { ($0.dueAt ?? .distantFuture) < soon }.count
         let blocked = open.filter { $0.status == .blocked }.count
         if dueSoon >= 3 || Double(blocked) / Double(open.count) > 0.3 {

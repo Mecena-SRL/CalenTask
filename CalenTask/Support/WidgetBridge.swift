@@ -74,7 +74,7 @@ enum WidgetBridge {
     }
 
     private static func makeSnapshot(in context: ModelContext) throws -> WidgetSnapshot {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let today = Date.now.startOfDay
 
         let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
