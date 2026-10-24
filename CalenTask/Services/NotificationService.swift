@@ -230,7 +230,7 @@ final class NotificationService {
         // quello richiede un entitlement speciale di Apple).
         content.interruptionLevel = isUrgent ? .timeSensitive : .active
         content.userInfo = ["taskID": taskID.uuidString]
-        let components = Calendar.current.dateComponents(
+        let components = Calendar.app.dateComponents(
             [.year, .month, .day, .hour, .minute], from: fireDate
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
@@ -251,7 +251,7 @@ final class NotificationService {
 
     /// Deadlines set via date chips land at midnight; notify at 09:00 instead.
     static func dueFireDate(for dueAt: Date) -> Date {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let components = calendar.dateComponents([.hour, .minute], from: dueAt)
         if components.hour == 0 && components.minute == 0 {
             return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueAt) ?? dueAt
@@ -279,7 +279,7 @@ final class NotificationService {
         let enabled = UserDefaults.standard.object(forKey: Self.digestEnabledKey) as? Bool ?? true
         guard enabled, events + deadlines + overdue > 0 else { return }
 
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         guard var fireDate = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: .now)
         else { return }
         if fireDate <= .now {

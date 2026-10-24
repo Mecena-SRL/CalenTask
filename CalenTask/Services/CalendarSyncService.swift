@@ -58,7 +58,7 @@ final class CalendarSyncService {
 
     /// Window kept intentionally wide: a month back, a year ahead.
     private var syncWindow: (start: Date, end: Date) {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let start = calendar.date(byAdding: .day, value: -30, to: .now.startOfDay)!
         let end = calendar.date(byAdding: .day, value: 365, to: .now.startOfDay)!
         return (start, end)
@@ -230,7 +230,7 @@ final class CalendarSyncService {
     /// solo la prima. Si cerca vicino alla data originale e a `hint` (l'ultima
     /// data nota, se l'occorrenza è stata spostata).
     private func occurrence(series: String, at occurrenceDate: Date, near hint: Date?) -> EKEvent? {
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let from = min(occurrenceDate, hint ?? occurrenceDate)
         let to = max(occurrenceDate, hint ?? occurrenceDate)
         guard let start = calendar.date(byAdding: .day, value: -1, to: from),

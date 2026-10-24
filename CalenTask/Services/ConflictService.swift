@@ -19,7 +19,7 @@ enum ConflictService {
         guard !otherTaskIDs.isEmpty else { return [] }
 
         // #5 — solo quelle attività e solo in quel giorno, filtrate nello store.
-        let calendar = Calendar.current
+        let calendar = Calendar.app
         let dayStart = calendar.startOfDay(for: day)
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
         let past = Date.distantPast

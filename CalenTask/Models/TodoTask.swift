@@ -159,7 +159,7 @@ final class TodoTask {
 
     var isOverdue: Bool {
         guard let dueAt, !isDone else { return false }
-        return dueAt < Calendar.current.startOfDay(for: .now)
+        return dueAt < Calendar.app.startOfDay(for: .now)
     }
 
     /// Live (non-deleted) children, ordered.

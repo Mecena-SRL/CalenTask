@@ -60,7 +60,7 @@ enum AutomationEngine {
                 createdByID: task.createdByID
             )
             if let offset = rule.createTaskDueOffsetDays {
-                followUp.dueAt = Calendar.current.date(
+                followUp.dueAt = Calendar.app.date(
                     byAdding: .day, value: offset, to: .now.startOfDay
                 )
             }
