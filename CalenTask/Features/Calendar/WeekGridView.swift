@@ -396,7 +396,7 @@ struct WeekGridView: View {
     private func handleDrop(_ items: [String], on day: Date, at location: CGPoint) -> Bool {
         guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
         let descriptor = FetchDescriptor<TodoTask>(predicate: #Predicate<TodoTask> { $0.id == id })
-        guard let task = try? modelContext.fetch(descriptor).first else { return false }
+        guard let task = modelContext.fetchOrLog(descriptor).first else { return false }
 
         let snapped = snap(minutes(at: location.y))
         let clampedMinutes = min(max(snapped, 0), 23 * 60)
