@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 /// Il calendario (D42): cinque viste — Giorno, Settimana, Mese, Trimestre
 /// (per pianificare anche le tasse) e Anno — con sync ai calendari di
@@ -1273,9 +1274,15 @@ struct CalendarScreen: View {
         // caricata segue il giorno selezionato, non oggi.
         let start = calendar.startOfDay(for: .now)
         let end = calendar.date(byAdding: .day, value: 8, to: start) ?? start
-        let upcoming = (try? TodoTask.fetchCalendarWindow(
-            from: start, to: end, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), in: modelContext
-        )) ?? []
+        let upcoming: [TodoTask]
+        do {
+            upcoming = try TodoTask.fetchCalendarWindow(
+                from: start, to: end, workspaceID: WorkspaceScope.workspaceID(raw: scopeRaw), in: modelContext
+            )
+        } catch {
+            Log.store.error("Finestra calendario (slot liberi) fallita: \(String(describing: error), privacy: .public)")
+            upcoming = []
+        }
         slotProposals = Self.freeSlots(
             duration: duration, in: visible(upcoming), calendar: calendar
         )

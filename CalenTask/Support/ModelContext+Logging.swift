@@ -36,4 +36,19 @@ extension ModelContext {
             return []
         }
     }
+
+    /// Conta nello store; se fallisce registra l'errore e ritorna `0`.
+    nonisolated func fetchCountOrLog<T: PersistentModel>(
+        _ descriptor: FetchDescriptor<T>, file: StaticString = #fileID, line: UInt = #line
+    ) -> Int {
+        do {
+            return try fetchCount(descriptor)
+        } catch {
+            let location = "\(file):\(line)"
+            Log.store.error(
+                "Conteggio di \(String(describing: T.self), privacy: .public) fallito: \(String(describing: error), privacy: .public) [\(location, privacy: .public)]"
+            )
+            return 0
+        }
+    }
 }
