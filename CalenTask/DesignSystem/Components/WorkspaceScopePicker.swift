@@ -316,6 +316,6 @@ private struct OpenCountsReader<Content: View>: View {
     }
 
     private func count(_ predicate: Predicate<TodoTask>) -> Int {
-        (try? modelContext.fetchCount(FetchDescriptor<TodoTask>(predicate: predicate))) ?? 0
+        modelContext.fetchCountOrLog(FetchDescriptor<TodoTask>(predicate: predicate))
     }
 }

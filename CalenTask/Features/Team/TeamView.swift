@@ -14,7 +14,7 @@ struct TeamView: View {
     /// Attività aperte di una persona, contate nello store.
     private func load(for person: UserProfile) -> Int {
         let predicate = TodoTask.openAssignedPredicate(assigneeID: person.id)
-        return (try? modelContext.fetchCount(FetchDescriptor<TodoTask>(predicate: predicate))) ?? 0
+        return modelContext.fetchCountOrLog(FetchDescriptor<TodoTask>(predicate: predicate))
     }
 
     @State private var newName = ""
