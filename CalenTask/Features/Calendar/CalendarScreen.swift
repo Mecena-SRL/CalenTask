@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 /// Il calendario (D42): cinque viste — Giorno, Settimana, Mese, Trimestre
 /// (per pianificare anche le tasse) e Anno — con sync ai calendari di
