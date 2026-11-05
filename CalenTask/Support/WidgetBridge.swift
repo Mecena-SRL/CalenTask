@@ -62,7 +62,7 @@ enum WidgetBridge {
     static func refresh(in context: ModelContext) {
         guard let url = snapshotURL else { return }
         do {
-            let snapshot = try makeSnapshot(in: context)
+            let snapshot = try makeSnapshot(in: context, now: .now)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             try encoder.encode(snapshot).write(to: url, options: .atomic)
@@ -73,9 +73,10 @@ enum WidgetBridge {
         }
     }
 
-    private static func makeSnapshot(in context: ModelContext) throws -> WidgetSnapshot {
+    /// Internal (non private) per i test (#19): `now` è iniettabile.
+    static func makeSnapshot(in context: ModelContext, now: Date) throws -> WidgetSnapshot {
         let calendar = Calendar.app
-        let today = Date.now.startOfDay
+        let today = now.startOfDay
 
         let open = try context.fetch(FetchDescriptor(predicate: TodoTask.openPredicate))
         let inbox = try context.fetchCount(FetchDescriptor(predicate: TodoTask.inboxPredicate))
@@ -104,7 +105,7 @@ enum WidgetBridge {
         }
 
         return WidgetSnapshot(
-            generatedAt: .now,
+            generatedAt: now,
             dayLabel: today.formatted(.dateTime.weekday(.wide).day().month(.wide)),
             items: Array(items),
             overdueCount: overdue.count,
