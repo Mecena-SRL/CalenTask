@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct WidgetSnapshotTests {
 
-    private func makeContext() throws -> ModelContext {
+    private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Workspace.self, Membership.self, UserProfile.self,
             Project.self, TodoTask.self, TaskDependency.self, Tag.self,
@@ -15,11 +15,12 @@ struct WidgetSnapshotTests {
             Contact.self, CrewAssignment.self, ProductionScene.self,
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        return try ModelContainer(for: schema, configurations: [config]).mainContext
+        return try ModelContainer(for: schema, configurations: [config])
     }
 
     @Test func snapshotCountsTodayOverdueAndInbox() throws {
-        let context = try makeContext()
+        let container = try makeContainer() // va tenuto vivo: il contesto non lo trattiene
+        let context = container.mainContext
         let ws = UUID(), me = UUID()
         let now = try #require(Calendar.app.date(
             bySettingHour: 10, minute: 0, second: 0, of: Date(timeIntervalSince1970: 1_790_000_000)
@@ -37,5 +38,6 @@ struct WidgetSnapshotTests {
         #expect(snapshot.items.map(\.title) == ["Oggi"])
         #expect(snapshot.overdueCount == 1)
         #expect(snapshot.inboxCount == 2)
+        withExtendedLifetime(container) {}
     }
 }
