@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 /// "Importa dai Contatti" (CRM-1, D72): selezione multipla dalla rubrica del
 /// device, dedupe automatico per identifier/email, atterraggio nello spazio
@@ -128,8 +129,13 @@ struct ContactsImportView: View {
             phase = .denied
             return
         }
-        let fetched = await Task.detached(priority: .userInitiated) {
-            (try? ContactsImportService.fetchDeviceContacts()) ?? []
+        let fetched = await Task.detached(priority: .userInitiated) { () -> [ContactsImportService.DeviceContact] in
+            do {
+                return try ContactsImportService.fetchDeviceContacts()
+            } catch {
+                Log.app.error("Lettura contatti fallita: \(error.localizedDescription, privacy: .public)")
+                return []
+            }
         }.value
         deviceContacts = fetched
         phase = .ready
