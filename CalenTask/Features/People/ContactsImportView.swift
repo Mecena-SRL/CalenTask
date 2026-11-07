@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 /// "Importa dai Contatti" (CRM-1, D72): selezione multipla dalla rubrica del
 /// device, dedupe automatico per identifier/email, atterraggio nello spazio
