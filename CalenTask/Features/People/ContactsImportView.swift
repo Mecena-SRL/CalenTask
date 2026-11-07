@@ -129,7 +129,12 @@ struct ContactsImportView: View {
             return
         }
         let fetched = await Task.detached(priority: .userInitiated) {
-            (try? ContactsImportService.fetchDeviceContacts()) ?? []
+            do {
+                return try ContactsImportService.fetchDeviceContacts()
+            } catch {
+                Log.app.error("Lettura contatti fallita: \(error.localizedDescription, privacy: .public)")
+                return []
+            }
         }.value
         deviceContacts = fetched
         phase = .ready
