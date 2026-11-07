@@ -128,7 +128,7 @@ struct ContactsImportView: View {
             phase = .denied
             return
         }
-        let fetched = await Task.detached(priority: .userInitiated) {
+        let fetched = await Task.detached(priority: .userInitiated) { () -> [ContactsImportService.DeviceContact] in
             do {
                 return try ContactsImportService.fetchDeviceContacts()
             } catch {
