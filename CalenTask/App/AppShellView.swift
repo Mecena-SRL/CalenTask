@@ -118,6 +118,7 @@ struct AppShellView: View {
                 reportFailure("Seed failed: \(error)")
             }
             SmokeSeeder.seedIfRequested(in: modelContext)
+            TrashService.purgeExpired(in: modelContext)
             WidgetBridge.refresh(in: modelContext)
             WeatherService.shared.refreshIfNeeded()
             if !didShowWelcome {
