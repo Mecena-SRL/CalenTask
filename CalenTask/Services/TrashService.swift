@@ -27,4 +27,35 @@ enum TrashService {
         context.saveOrLog()
         return purgeable.count
     }
+
+    /// Attività nel cestino (radici dei sottoalberi eliminati), le più recenti prima.
+    @MainActor
+    static func trashedRoots(in context: ModelContext) -> [TodoTask] {
+        let predicate = #Predicate<TodoTask> { $0.deletedAt != nil }
+        return context.fetchOrLog(FetchDescriptor<TodoTask>(predicate: predicate))
+            .filter { $0.parentTask?.deletedAt == nil }
+            .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+    }
+
+    /// Ripristina una task e tutto il suo sottoalbero eliminato.
+    @MainActor
+    static func restore(_ task: TodoTask) {
+        for child in task.subtasks where child.deletedAt != nil {
+            restore(child)
+        }
+        guard task.deletedAt != nil else { return }
+        task.deletedAt = nil
+        task.touch()
+    }
+
+    /// Elimina definitivamente tutto il cestino. Ritorna quante task ha rimosso.
+    @MainActor
+    @discardableResult
+    static func emptyTrash(in context: ModelContext) -> Int {
+        let predicate = #Predicate<TodoTask> { $0.deletedAt != nil }
+        let all = context.fetchOrLog(FetchDescriptor<TodoTask>(predicate: predicate))
+        all.forEach { context.delete($0) }
+        context.saveOrLog()
+        return all.count
+    }
 }
