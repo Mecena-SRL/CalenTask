@@ -32,6 +32,17 @@ extension TodoTask {
         touch()
     }
 
+    /// Ripristina dal cestino la task e le sotto-attività eliminate con lei.
+    @MainActor
+    func restoreSubtree() {
+        guard deletedAt != nil else { return }
+        for child in subtasks where child.deletedAt != nil {
+            child.restoreSubtree()
+        }
+        deletedAt = nil
+        touch()
+    }
+
     /// Soft-deletes the whole subtree. Deleting a phase takes its children
     /// with it (coherent with the unified tree — see Progettazione/04).
     @MainActor

@@ -27,4 +27,12 @@ enum TrashService {
         context.saveOrLog()
         return purgeable.count
     }
+
+    /// Elimina subito e per sempre le task indicate (svuota cestino).
+    @MainActor
+    static func deleteForever(_ tasks: [TodoTask], in context: ModelContext) {
+        guard !tasks.isEmpty else { return }
+        tasks.forEach { context.delete($0) }
+        context.saveOrLog()
+    }
 }

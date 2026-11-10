@@ -35,4 +35,19 @@ struct TrashServiceTests {
         let titles = try context.fetch(FetchDescriptor<TodoTask>()).map(\.title).sorted()
         #expect(titles == ["Recente", "Viva"])
     }
+
+    @Test func restoreSubtreeBringsBackChildrenToo() throws {
+        let context = try makeContext()
+        let author = UUID(), ws = UUID()
+        let parent = TodoTask(workspaceID: ws, title: "Padre", createdByID: author)
+        let child = TodoTask(workspaceID: ws, title: "Figlio", createdByID: author)
+        context.insert(parent)
+        context.insert(child)
+        child.parentTask = parent
+        parent.softDeleteSubtree()
+        #expect(parent.deletedAt != nil && child.deletedAt != nil)
+
+        parent.restoreSubtree()
+        #expect(parent.deletedAt == nil && child.deletedAt == nil)
+    }
 }
