@@ -77,7 +77,7 @@ struct PhaseSectionView: View {
                     }
                     Divider()
                     Button("Elimina fase", role: .destructive) {
-                        withAnimation { phase.softDeleteSubtree() }
+                        withAnimation { phase.deleteWithUndo() }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")

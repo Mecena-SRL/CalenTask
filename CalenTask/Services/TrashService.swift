@@ -48,6 +48,20 @@ enum TrashService {
         task.touch()
     }
 
+    /// Ripristino per ID (toast "Eliminata · Annulla"): ritorna false se la
+    /// task non c'è più o non è nel cestino.
+    @MainActor
+    @discardableResult
+    static func restore(taskID: UUID, in context: ModelContext) -> Bool {
+        let predicate = #Predicate<TodoTask> { $0.id == taskID }
+        var descriptor = FetchDescriptor<TodoTask>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        guard let task = context.fetchOrLog(descriptor).first,
+              task.deletedAt != nil else { return false }
+        restore(task)
+        return true
+    }
+
     /// Elimina definitivamente tutto il cestino. Ritorna quante task ha rimosso.
     @MainActor
     @discardableResult

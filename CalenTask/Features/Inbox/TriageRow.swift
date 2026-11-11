@@ -22,7 +22,7 @@ struct TriageRow: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                withAnimation { task.softDelete() }
+                withAnimation { task.deleteWithUndo() }
             } label: {
                 Label("Elimina", systemImage: "trash")
             }

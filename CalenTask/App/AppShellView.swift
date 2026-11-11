@@ -73,6 +73,15 @@ struct AppShellView: View {
             captureSheet
         }
         #endif
+        // #22 — "Eliminata · Annulla" dopo ogni eliminazione dall'interfaccia.
+        .overlay(alignment: .bottom) {
+            if let notice = router.deletionNotice {
+                DeletionToast(notice: notice)
+                    .padding(.bottom, deletionToastBottomPadding)
+                    .id(notice.id)
+            }
+        }
+        .animation(.dsQuick, value: router.deletionNotice)
         // La finestra intera, non la split view: la sua larghezza non cambia
         // quando l'inspector entra o esce.
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -243,6 +252,15 @@ struct AppShellView: View {
         NotificationService.shared.scheduleDailyDigest(
             events: events, deadlines: deadlines, overdue: overdue
         )
+    }
+
+    /// Sopra la tab bar e il pulsante "+" su iPhone; vicino al bordo altrove.
+    private var deletionToastBottomPadding: CGFloat {
+        #if os(iOS)
+        horizontalSizeClass == .regular ? DS.l : 128
+        #else
+        DS.l
+        #endif
     }
 
     #if os(macOS)
