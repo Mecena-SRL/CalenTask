@@ -174,6 +174,7 @@ struct SettingsPageView: View {
         case .appearance: AppearanceSettingsView()
         case .notifications: NotificationsSettingsView()
         case .sync: SyncSettingsView()
+        case .trash: TrashSettingsView()
         case .developer: DeveloperSettingsView()
         case .account: AccountSettingsView()
         case .modules: ModulesOverviewView()
