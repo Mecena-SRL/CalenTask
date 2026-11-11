@@ -237,13 +237,7 @@ private struct TaskMenuItems: View {
         Divider()
 
         Button(role: .destructive) {
-            withAnimation {
-                if task.isPhase {
-                    task.softDeleteSubtree()
-                } else {
-                    task.softDelete()
-                }
-            }
+            withAnimation { task.deleteWithUndo() }
         } label: {
             Label("Elimina", systemImage: "trash")
         }

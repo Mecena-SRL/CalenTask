@@ -98,6 +98,9 @@ final class AppRouter {
     /// Un solo ingresso alle Impostazioni su iOS (D70); macOS usa la scena Settings.
     var isSettingsOpen = false
 
+    /// #22 — ultima eliminazione, mostrata nel toast "Eliminata · Annulla".
+    var deletionNotice: DeletionNotice?
+
     func go(_ section: AppSection) {
         destination = .section(section)
     }
@@ -126,4 +129,16 @@ final class AppRouter {
     func inspect(taskID: UUID) {
         taskForInspector = taskID
     }
+
+    func announceDeletion(taskID: UUID, title: String) {
+        deletionNotice = DeletionNotice(taskID: taskID, title: title)
+    }
+}
+
+/// #22 — cosa è appena finito nel cestino. `id` cambia a ogni eliminazione,
+/// così il timer del toast riparte anche se si elimina la stessa task.
+struct DeletionNotice: Identifiable, Equatable {
+    let id = UUID()
+    let taskID: UUID
+    let title: String
 }

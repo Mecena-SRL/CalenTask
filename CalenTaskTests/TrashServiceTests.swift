@@ -61,4 +61,19 @@ struct TrashServiceTests {
         #expect(TrashService.emptyTrash(in: context) == 1)
         #expect(try context.fetch(FetchDescriptor<TodoTask>()).map(\.title) == ["Viva"])
     }
+
+    /// Toast "Eliminata · Annulla": ripristino per ID, solo se è nel cestino.
+    @Test func restoreByIDOnlyTouchesTrashedTask() throws {
+        let context = try makeContext()
+        let author = UUID(), ws = UUID()
+        let task = TodoTask(workspaceID: ws, title: "Annullabile", createdByID: author)
+        context.insert(task)
+        try context.save()
+
+        #expect(TrashService.restore(taskID: task.id, in: context) == false)
+        task.softDelete()
+        #expect(TrashService.restore(taskID: task.id, in: context))
+        #expect(task.deletedAt == nil)
+        #expect(TrashService.restore(taskID: UUID(), in: context) == false)
+    }
 }

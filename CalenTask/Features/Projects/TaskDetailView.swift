@@ -237,7 +237,7 @@ struct TaskDetailView: View {
                             .foregroundStyle(subtask.isDone ? .secondary : .primary)
                         Spacer()
                         Button(role: .destructive) {
-                            withAnimation { subtask.softDelete() }
+                            withAnimation { subtask.deleteWithUndo() }
                         } label: {
                             Image(systemName: "trash")
                                 .font(.dsCaption)
@@ -285,7 +285,7 @@ struct TaskDetailView: View {
 
             Section {
                 Button("Elimina attività", role: .destructive) {
-                    task.softDelete()
+                    task.deleteWithUndo()
                     dismiss()
                 }
             }
