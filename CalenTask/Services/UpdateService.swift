@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import Security
 #if os(macOS)
 import AppKit
