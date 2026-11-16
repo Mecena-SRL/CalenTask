@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import Security
 #if os(macOS)
 import AppKit
@@ -402,7 +403,12 @@ nonisolated enum UpdateInstaller {
         let staged = appURL.deletingLastPathComponent()
             .appendingPathComponent(".CalenTask-update-\(UUID().uuidString).app")
         _ = try run("/usr/bin/ditto", [newApp.path, staged.path])
-        _ = try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path])
+        do {
+            _ = try run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path])
+        } catch {
+            // Non bloccante: l'app resta installabile, ma Gatekeeper può chiedere conferma.
+            Log.app.error("Rimozione quarantena non riuscita: \(error.localizedDescription, privacy: .public)")
+        }
         do {
             _ = try FileManager.default.replaceItemAt(appURL, withItemAt: staged)
         } catch {
@@ -416,7 +422,11 @@ nonisolated enum UpdateInstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", appURL.path]
-        try? process.run()
+        do {
+            try process.run()
+        } catch {
+            Log.app.error("Riapertura dopo l'aggiornamento non riuscita: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func attach(_ dmg: URL) throws -> URL {
