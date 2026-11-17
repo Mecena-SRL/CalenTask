@@ -230,9 +230,12 @@ final class NotificationService {
         // quello richiede un entitlement speciale di Apple).
         content.interruptionLevel = isUrgent ? .timeSensitive : .active
         content.userInfo = ["taskID": taskID.uuidString]
-        let components = Calendar.app.dateComponents(
+        var components = Calendar.app.dateComponents(
             [.year, .month, .day, .hour, .minute], from: fireDate
         )
+        // #13 — fuso esplicito: senza, il sistema reinterpreta l'orario nel
+        // fuso del momento dello scatto e un viaggio sposta l'avviso.
+        components.timeZone = Calendar.app.timeZone
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
