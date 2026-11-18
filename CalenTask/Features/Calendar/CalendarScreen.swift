@@ -393,6 +393,8 @@ struct CalendarScreen: View {
                             .foregroundStyle(monthHeatmap ? Color.accentColor : Color.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Heatmap densità")
+                    .accessibilityAddTraits(monthHeatmap ? .isSelected : [])
                     .help("Heatmap densità")
                     .padding(.trailing, DS.s)
                 }
@@ -655,6 +657,7 @@ struct CalendarScreen: View {
                     .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             }
+            .accessibilityLabel("Riduci altezza ore")
             .disabled(CGFloat(hourHeightStored) <= hourHeightRange.lowerBound)
             Divider().frame(height: 14)
             Button { adjustHourHeight(10) } label: {
@@ -662,6 +665,7 @@ struct CalendarScreen: View {
                     .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             }
+            .accessibilityLabel("Aumenta altezza ore")
             .disabled(CGFloat(hourHeightStored) >= hourHeightRange.upperBound)
         }
         .font(.dsCaption.weight(.bold))
