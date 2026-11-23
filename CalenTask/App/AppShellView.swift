@@ -167,7 +167,18 @@ struct AppShellView: View {
             // notifiche (anche delle attività arrivate da iCloud).
             if phase == .active {
                 NotificationService.shared.resyncAll(in: modelContext)
+                // #21 — sync calendario al ritorno in primo piano.
+                Task { await CalendarSyncService.shared.autoSyncIfNeeded(in: modelContext) }
             }
+        }
+        // #21 — modifiche al calendario di sistema con l'app aperta, a raffica
+        // finita (un account Google ne manda molte).
+        .onReceive(
+            CalendarSyncService.storeChangedPublisher
+                .debounce(for: .seconds(3), scheduler: RunLoop.main)
+        ) { _ in
+            guard scenePhase == .active else { return }
+            Task { await CalendarSyncService.shared.autoSyncIfNeeded(in: modelContext, fromStoreChange: true) }
         }
         // #29 — modifiche arrivate da iCloud mentre l'app è aperta: notifiche,
         // digest e widget si riallineano subito (prima solo all'avvio e al
