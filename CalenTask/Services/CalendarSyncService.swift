@@ -33,6 +33,12 @@ final class CalendarSyncService {
         set { UserDefaults.standard.set(newValue, forKey: Self.syncEnabledKey) }
     }
 
+    /// #21 — Notifica di modifica dello store di sistema (altro dispositivo,
+    /// app Calendario, account Google/Exchange).
+    nonisolated static var storeChangedPublisher: NotificationCenter.Publisher {
+        NotificationCenter.default.publisher(for: .EKEventStoreChanged)
+    }
+
     private init() {
         isAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
     }
@@ -64,7 +70,26 @@ final class CalendarSyncService {
         return (start, end)
     }
 
+    /// #21 — una sola sync alla volta, a prescindere da chi la chiede
+    /// (apertura del Calendario, primo piano, `EKEventStoreChanged`).
+    private var isSyncing = false
+    /// Le scritture della sync stessa fanno scattare `EKEventStoreChanged`:
+    /// le notifiche arrivate subito dopo la fine vanno ignorate (niente cicli).
+    private var lastFinishedAt: Date?
+
+    /// #21 — Sync automatica: solo se attiva e già autorizzata (non chiede
+    /// permessi di sua iniziativa) e non come eco di una sync appena finita.
+    func autoSyncIfNeeded(in context: ModelContext, fromStoreChange: Bool = false) async {
+        guard isSyncEnabled, isAuthorized else { return }
+        if fromStoreChange, let last = lastFinishedAt, Date.now.timeIntervalSince(last) < 5 { return }
+        guard let identity = try? SeedService.identity(in: context) else { return }
+        await syncNow(in: context, workspaceID: identity.workspace.id, createdBy: identity.me.id)
+    }
+
     func syncNow(in context: ModelContext, workspaceID: UUID, createdBy: UUID) async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false; lastFinishedAt = .now }
         guard await requestAccessIfNeeded() else { return }
         do {
             let events = await Self.fetchEvents(in: store, window: syncWindow)
