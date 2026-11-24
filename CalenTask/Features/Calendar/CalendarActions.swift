@@ -41,19 +41,8 @@ enum CalendarActions {
     /// apre l'editor (i dettagli si mettono lì).
     static func createTask(start: Date, end: Date, in context: ModelContext, router: AppRouter) {
         do {
-            let (workspace, me) = try SeedService.identity(in: context)
-            let target = WorkspaceScope.creationTarget(in: context, fallback: workspace)
-            let task = TodoTask(
-                workspaceID: target.id,
-                title: "Nuova attività",
-                kind: .task,
-                startAt: start,
-                endAt: max(end, start.addingTimeInterval(15 * 60)),
-                createdByID: me.id
-            )
-            context.insert(task)
-            context.saveOrLog()
-            NotificationService.shared.sync(task: task)
+            let task = try TaskFactory.createScheduled(
+                title: "Nuova attività", kind: .task, start: start, end: end, in: context)
             #if os(macOS)
             router.inspect(taskID: task.id)
             #else
