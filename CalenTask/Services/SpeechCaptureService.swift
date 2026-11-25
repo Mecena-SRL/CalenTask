@@ -74,7 +74,11 @@ final class SpeechCaptureService {
         request = nil
         isRecording = false
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            Log.app.error("Sessione audio: disattivazione fallita: \(error.localizedDescription, privacy: .public)")
+        }
         #endif
     }
 
@@ -87,8 +91,12 @@ final class SpeechCaptureService {
 
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try? session.setActive(true, options: .notifyOthersOnDeactivation)
+        do {
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            Log.app.error("Sessione audio: attivazione fallita: \(error.localizedDescription, privacy: .public)")
+        }
         #endif
 
         let request = SFSpeechAudioBufferRecognitionRequest()
