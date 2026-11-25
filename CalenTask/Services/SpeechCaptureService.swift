@@ -2,6 +2,7 @@ import Foundation
 import Speech
 import AVFoundation
 import Observation
+import os
 
 /// Voice capture (S6/D66): dettatura on-device → testo nella cattura.
 /// Italiano, offline quando il modello locale è disponibile.
