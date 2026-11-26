@@ -31,4 +31,27 @@ enum TaskFactory {
         NotificationService.shared.sync(task: task)
         return task
     }
+
+    /// Crea una task dentro un progetto (opzionalmente sotto una fase), con
+    /// workspace e autore ereditati dal progetto. Inserisce ma non salva:
+    /// il salvataggio spetta al chiamante (creazioni in blocco).
+    @discardableResult
+    static func createInProject(
+        title: String,
+        project: Project,
+        phase: TodoTask? = nil,
+        sortOrder: Int,
+        in context: ModelContext
+    ) -> TodoTask {
+        let task = TodoTask(
+            workspaceID: project.workspaceID,
+            title: title,
+            sortOrder: sortOrder,
+            createdByID: project.createdByID
+        )
+        context.insert(task)
+        task.project = project
+        task.parentTask = phase
+        return task
+    }
 }

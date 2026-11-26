@@ -122,15 +122,13 @@ private struct PlannerColumn: View {
     private func addTask() {
         let title = newTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
-        let task = TodoTask(
-            workspaceID: project.workspaceID,
+        TaskFactory.createInProject(
             title: title,
+            project: project,
+            phase: phase,
             sortOrder: (liveTasks.map(\.sortOrder).max() ?? -1) + 1,
-            createdByID: project.createdByID
+            in: modelContext
         )
-        modelContext.insert(task)
-        task.project = project
-        task.parentTask = phase
         newTitle = ""
     }
 }

@@ -63,15 +63,13 @@ struct BatchTaskEntryView: View {
         let siblings = phase?.liveSubtasks ?? project.unphasedTasks
         let baseOrder = (siblings.map(\.sortOrder).max() ?? -1) + 1
         for (index, title) in lines.enumerated() {
-            let task = TodoTask(
-                workspaceID: project.workspaceID,
+            let task = TaskFactory.createInProject(
                 title: title,
+                project: project,
+                phase: phase,
                 sortOrder: baseOrder + index,
-                createdByID: project.createdByID
+                in: modelContext
             )
-            modelContext.insert(task)
-            task.project = project
-            task.parentTask = phase
             TagService.syncTags(for: task, in: modelContext)
         }
         do {
