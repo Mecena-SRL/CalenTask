@@ -1384,18 +1384,10 @@ struct CalendarScreen: View {
 
     private func createBlock(at slot: Date) {
         do {
-            let (workspace, me) = try SeedService.identity(in: modelContext)
-            let target = WorkspaceScope.creationTarget(in: modelContext, fallback: workspace)
-            let event = TodoTask(
-                workspaceID: target.id,
-                title: "Nuovo evento",
-                kind: .event,
-                startAt: slot,
-                endAt: slot.addingTimeInterval(TimeInterval(slotDuration * 60)),
-                createdByID: me.id
-            )
-            modelContext.insert(event)
-            try modelContext.save()
+            let event = try TaskFactory.createScheduled(
+                title: "Nuovo evento", kind: .event, start: slot,
+                end: slot.addingTimeInterval(TimeInterval(slotDuration * 60)),
+                in: modelContext)
             showsSlotResults = false
             selectedDay = slot.startOfDay
             router.open(taskID: event.id)   // dettaglio subito, per dargli un nome
